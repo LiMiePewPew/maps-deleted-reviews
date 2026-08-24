@@ -3,8 +3,9 @@
 import { access, copyFile } from 'node:fs/promises';
 import { parseCliArgs } from './cli.js';
 import { loadConfigs } from './config.js';
-import { mergeCsvFiles, writePositiveCsvFile } from './csvSort.js';
+import { mergeCsvFiles } from './csvSort.js';
 import { resetBatchVenueCache, runScraper } from './mapsScraper.js';
+import { runCityPipeline } from './pipelineV2.js';
 import { formatRunSummary, writeRunSummary } from './summary.js';
 
 async function main(): Promise<void> {
@@ -20,6 +21,26 @@ async function main(): Promise<void> {
   const cities = [...new Set(configs.map((config) => config.city))];
   if (cli.fullGastroScan && cities.length !== 1) {
     throw new Error('--full-gastro-scan currently supports exactly one city per invocation.');
+  }
+
+  if (cli.fullGastroScan) {
+    const summary = await runCityPipeline(configs, cli.workers);
+    console.log('\n=== PIPELINE V2 SUMMARY ===');
+    console.log(`City: ${summary.city}, ${summary.country}`);
+    console.log(`Search terms: ${summary.searchTerms}`);
+    console.log(`Unique venues: ${summary.discoveredVenues}`);
+    console.log(`Checked venues: ${summary.checkedVenues}`);
+    console.log(`Removal notices: ${summary.noticeVenues}`);
+    console.log(`Partial: ${summary.partialVenues}`);
+    console.log(`Failed: ${summary.failedVenues}`);
+    console.log(`Workers: ${summary.workers}`);
+    console.log(`Mode: ${summary.headed ? 'headed' : 'headless'}`);
+    console.log(`Output: ${summary.outputPath}`);
+    console.log(`Positive: ${summary.positivePath}`);
+    console.log(`State: ${summary.statePath}`);
+    console.log(`Runtime: ${(summary.durationMs / 1000).toFixed(1)}s`);
+    console.log('Done.');
+    return;
   }
 
   resetBatchVenueCache();
@@ -52,32 +73,17 @@ async function main(): Promise<void> {
   }
 
   const configuredMergePath = configs.find((config) => config.mergeCsvPath)?.mergeCsvPath;
-  const mergeCsvPath =
-    configuredMergePath ??
-    (cli.fullGastroScan && cities[0]
-      ? `output/deleted-reviews-${slugify(cities[0])}-gastro-all.csv`
-      : undefined);
-
-  if (mergeCsvPath) {
+  if (configuredMergePath) {
     const inputPaths = (
       await Promise.all(
         [...candidateOutputPaths].map(async (path) => ((await fileExists(path)) ? path : null)),
       )
-    ).filter((path): path is string => path !== null && path !== mergeCsvPath);
+    ).filter((path): path is string => path !== null && path !== configuredMergePath);
 
     if (inputPaths.length > 0) {
-      const uniqueVenues = await mergeCsvFiles(mergeCsvPath, inputPaths);
-      console.log(`Merged CSV: ${mergeCsvPath}`);
+      const uniqueVenues = await mergeCsvFiles(configuredMergePath, inputPaths);
+      console.log(`Merged CSV: ${configuredMergePath}`);
       console.log(`Unique venues: ${uniqueVenues}`);
-
-      if (cli.fullGastroScan) {
-        const positivePath = mergeCsvPath.replace(/\.csv$/i, '-positive.csv');
-        const positiveVenues = await writePositiveCsvFile(mergeCsvPath, positivePath);
-        console.log(`Removal-notice CSV: ${positivePath}`);
-        console.log(`Venues with notices: ${positiveVenues}`);
-      }
-    } else {
-      console.warn('No CSV outputs were available to merge.');
     }
   }
 
@@ -118,15 +124,6 @@ async function fileExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-function slugify(value: string): string {
-  return value
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
 }
 
 main().catch((error: unknown) => {
