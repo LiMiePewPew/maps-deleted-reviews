@@ -12,10 +12,12 @@ import {
 import type { ScrapedVenue, ScraperConfig, Venue } from './types.js';
 import { venueIdentityKey } from './venueIdentity.js';
 
-const PIPELINE_VERSION = 2;
+const PIPELINE_STATE_VERSION = 3;
 const NAVIGATION_ATTEMPTS = 2;
 const VENUE_READY_TIMEOUT_MS = 12_000;
 const REVIEWS_READY_TIMEOUT_MS = 8_000;
+const NEGATIVE_NOTICE_SETTLE_MS = 1_800;
+const REVIEWS_POLL_MS = 250;
 const CHECKPOINT_EVERY = 10;
 
 interface PipelineVenue extends Venue {
@@ -78,8 +80,6 @@ export async function runCityPipeline(
   const statePath = `output/state-${slug}-gastro-v2.json`;
   let state = await loadPipelineState(statePath, city, country);
 
-  // A completed run is a snapshot. Starting the command again creates a new snapshot,
-  // while interrupted runs remain resumable.
   if (state.finishedAt) {
     state = createPipelineState(city, country);
     await savePipelineState(statePath, state);
@@ -146,7 +146,8 @@ export async function runCityPipeline(
       return persistenceChain;
     };
 
-    const workerTasks = Array.from({ length: Math.min(workers, Math.max(1, pending.length)) }, async (_, workerIndex) => {
+    const workerCount = Math.min(workers, Math.max(1, pending.length));
+    const workerTasks = Array.from({ length: workerCount }, async (_, workerIndex) => {
       const page = workerIndex === 0 ? discoveryPage : await context.newPage();
       configurePage(page, first.navigationTimeoutMs);
 
@@ -161,12 +162,11 @@ export async function runCityPipeline(
         const row = await scrapeVenueCertified(page, first, venue);
         upsertRow(state.rows, row);
         const key = venueIdentityKey(venue);
-        if (!state.completedVenueKeys.includes(key)) {
+        if (row.status === 'ok' && !state.completedVenueKeys.includes(key)) {
           state.completedVenueKeys.push(key);
         }
 
-        const done = state.completedVenueKeys.length;
-        console.log(formatPipelineProgress(done, state.venues.length, row));
+        console.log(formatPipelineProgress(state.rows.length, state.venues.length, row));
         await persist(false);
       }
 
@@ -303,7 +303,15 @@ async function scrapeVenueCertified(
         return partialRow(venue, overviewText, lastError);
       }
 
-      const reviewsText = await waitForReviewsData(page, overviewReviewCount, REVIEWS_READY_TIMEOUT_MS);
+      const reviewsText = await waitForCertifiedReviewsText(page, REVIEWS_READY_TIMEOUT_MS);
+      if (reviewsText === null) {
+        lastError = 'Reviews panel opened but did not settle; negative notice result is not certified';
+        if (attempt < 2) {
+          continue;
+        }
+        return partialRow(venue, overviewText, lastError);
+      }
+
       const deleted = parseDeletedReviews(reviewsText);
       const totalReviews = parseReviewCount(reviewsText) ?? overviewReviewCount;
       const rating = overviewRating ?? parseStarRating(reviewsText);
@@ -356,25 +364,50 @@ async function waitForVenueData(page: Page, timeoutMs: number): Promise<string> 
   return latest;
 }
 
-async function waitForReviewsData(
+async function waitForCertifiedReviewsText(
   page: Page,
-  expectedReviewCount: number,
   timeoutMs: number,
-): Promise<string> {
-  const deadline = Date.now() + timeoutMs;
-  let latest = '';
+): Promise<string | null> {
+  const startedAt = Date.now();
+  const deadline = startedAt + timeoutMs;
+  const snapshots: string[] = [];
 
   while (Date.now() < deadline) {
-    latest = await getExtractionText(page);
-    const reviewCount = parseReviewCount(latest);
     const panelVisible = await hasReviewsPanel(page);
-    if (panelVisible && (reviewCount === expectedReviewCount || reviewCount !== null)) {
-      return latest;
+    const latest = await getExtractionText(page);
+
+    if (latest) {
+      snapshots.push(latest);
+      if (snapshots.length > 6) {
+        snapshots.shift();
+      }
     }
-    await page.waitForTimeout(250).catch(() => undefined);
+
+    const combined = combineSnapshots(snapshots);
+
+    // Positive evidence is authoritative as soon as it appears.
+    if (panelVisible && parseDeletedReviews(combined) !== null) {
+      return combined;
+    }
+
+    // Absence needs a settle period. This prevents overview review counts from
+    // making an incompletely hydrated reviews panel look like a certified zero.
+    if (
+      panelVisible &&
+      Date.now() - startedAt >= NEGATIVE_NOTICE_SETTLE_MS &&
+      parseReviewCount(combined) !== null
+    ) {
+      return combined;
+    }
+
+    await page.waitForTimeout(REVIEWS_POLL_MS).catch(() => undefined);
   }
 
-  return latest;
+  return null;
+}
+
+function combineSnapshots(snapshots: string[]): string {
+  return [...new Set(snapshots.map(normalizeWhitespace).filter(Boolean))].join(' ');
 }
 
 async function openReviewsPanel(page: Page): Promise<boolean> {
@@ -648,7 +681,7 @@ function configurePage(page: Page, timeoutMs: number): void {
 function createPipelineState(city: string, country: string): PipelineState {
   const now = new Date().toISOString();
   return {
-    version: PIPELINE_VERSION,
+    version: PIPELINE_STATE_VERSION,
     city,
     country,
     completedSearchTerms: [],
@@ -668,7 +701,7 @@ async function loadPipelineState(
   try {
     const parsed = JSON.parse(await readFile(path, 'utf8')) as PipelineState;
     if (
-      parsed.version !== PIPELINE_VERSION ||
+      parsed.version !== PIPELINE_STATE_VERSION ||
       parsed.city !== city ||
       parsed.country !== country ||
       !Array.isArray(parsed.venues) ||
