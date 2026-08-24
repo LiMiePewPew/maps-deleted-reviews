@@ -12,11 +12,12 @@ import {
 import {
   getReviewPanelEvidence,
   isNegativeReviewPanelReady,
+  isReviewPanelOpenEvidence,
 } from './reviewPanelEvidence.js';
 import type { ScrapedVenue, ScraperConfig, Venue } from './types.js';
 import { venueIdentityKey } from './venueIdentity.js';
 
-const PIPELINE_STATE_VERSION = 2;
+const PIPELINE_STATE_VERSION = 3;
 const NAVIGATION_ATTEMPTS = 2;
 const VENUE_READY_TIMEOUT_MS = 12_000;
 const REVIEWS_READY_TIMEOUT_MS = 12_000;
@@ -112,6 +113,7 @@ export async function runCityPipelineV3(
     reducedMotion: 'reduce',
   });
 
+  await resetPersistentContextPages(context);
   await installResourceBlocking(context);
 
   let discoveryDurationMs = 0;
@@ -437,9 +439,11 @@ async function scrapeVenueCertified(
         return partialRow(venue, overviewText, lastError);
       }
 
-      const reviewsOpened = await openReviewsPanel(page);
+      const reviewsOpened = await openReviewsPanel(page, venue.url);
       if (!reviewsOpened) {
-        lastError = 'Reviews panel could not be opened; removal notice is not certified';
+        lastError = isContributorUrl(page.url())
+          ? 'Review control navigated to a contributor profile; removal notice is not certified'
+          : 'Reviews panel could not be opened; removal notice is not certified';
         if (attempt < 2) {
           continue;
         }
@@ -548,18 +552,21 @@ async function waitForCertifiedReviewsText(page: Page, timeoutMs: number): Promi
   return null;
 }
 
-async function openReviewsPanel(page: Page): Promise<boolean> {
-  if (await hasReviewsPanel(page)) {
+async function openReviewsPanel(page: Page, expectedVenueUrl: string): Promise<boolean> {
+  if (!isPlaceDetailUrl(page.url())) {
+    return false;
+  }
+
+  if (await hasReviewsPanelOpenMarker(page)) {
     return true;
   }
 
   const candidateGroups: Locator[] = [
-    page.getByRole('tab', { name: /Rezensionen|Bewertungen|Reviews/i }),
-    page.getByRole('button', { name: /Rezensionen|Bewertungen|Reviews/i }),
+    page.getByRole('tab', { name: /^(?:Rezensionen|Bewertungen|Reviews)(?:\s.*)?$/i }),
+    page.getByRole('button', { name: /^(?:Rezensionen|Bewertungen|Reviews)(?:\s.*)?$/i }),
     page.locator(
-      '[role="tab"][aria-label*="Rezension"], [role="tab"][aria-label*="Bewertung"], [role="tab"][aria-label*="Review"], button[aria-label*="Rezension"], button[aria-label*="Bewertung"], button[aria-label*="Review"]',
+      '[role="tab"][aria-label*="Rezension"], [role="tab"][aria-label*="Bewertung"], [role="tab"][aria-label*="Review"]',
     ),
-    page.getByText(/^(?:Rezensionen|Bewertungen|Reviews)(?:\s.*)?$/i),
   ];
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -572,33 +579,54 @@ async function openReviewsPanel(page: Page): Promise<boolean> {
         }
 
         await candidate.scrollIntoViewIfNeeded().catch(() => undefined);
+        const existingPages = new Set(page.context().pages());
         await candidate.click({ timeout: 1_500 }).catch(() => undefined);
-        if (await waitForReviewsPanelMarker(page, 5_000)) {
+        await page.waitForTimeout(100).catch(() => undefined);
+        await closeNewContributorPages(page.context(), existingPages, page);
+
+        if (!isPlaceDetailUrl(page.url())) {
+          return false;
+        }
+        if (await waitForReviewsPanelMarker(page, 2_500)) {
           return true;
         }
       }
     }
 
+    const existingPages = new Set(page.context().pages());
     const clickedViaDom = await clickVisibleReviewsControlViaDom(page);
-    if (clickedViaDom && (await waitForReviewsPanelMarker(page, 5_000))) {
-      return true;
+    if (clickedViaDom) {
+      await page.waitForTimeout(100).catch(() => undefined);
+      await closeNewContributorPages(page.context(), existingPages, page);
+      if (!isPlaceDetailUrl(page.url())) {
+        return false;
+      }
+      if (await waitForReviewsPanelMarker(page, 2_500)) {
+        return true;
+      }
     }
 
     await page.waitForTimeout(300).catch(() => undefined);
   }
 
-  return hasReviewsPanel(page);
+  // Keep the expected URL in the signature intentionally: a caller always
+  // supplies the canonical venue URL, making accidental contributor navigation
+  // visible in diagnostics instead of silently treating that profile as a venue.
+  void expectedVenueUrl;
+  return isPlaceDetailUrl(page.url()) && hasReviewsPanelOpenMarker(page);
 }
 
 async function clickVisibleReviewsControlViaDom(page: Page): Promise<boolean> {
   return page
     .evaluate(() => {
-      const labelPattern = /Rezensionen|Bewertungen|Reviews/i;
+      const labelPattern = /^(?:Rezensionen|Bewertungen|Reviews)(?:\s+[\d.\s]+)?$/i;
       const candidates = Array.from(
         document.querySelectorAll<HTMLElement>('button, [role="tab"]'),
       );
       const visible = candidates.filter((element) => {
-        const label = `${element.getAttribute('aria-label') ?? ''} ${element.textContent ?? ''}`;
+        const label = `${element.getAttribute('aria-label') ?? ''} ${element.textContent ?? ''}`
+          .replace(/\s+/g, ' ')
+          .trim();
         if (!labelPattern.test(label)) {
           return false;
         }
@@ -627,7 +655,10 @@ async function clickVisibleReviewsControlViaDom(page: Page): Promise<boolean> {
 async function waitForReviewsPanelMarker(page: Page, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (await hasReviewsPanel(page)) {
+    if (!isPlaceDetailUrl(page.url())) {
+      return false;
+    }
+    if (await hasReviewsPanelOpenMarker(page)) {
       return true;
     }
     await page.waitForTimeout(100).catch(() => undefined);
@@ -635,9 +666,9 @@ async function waitForReviewsPanelMarker(page: Page, timeoutMs: number): Promise
   return false;
 }
 
-async function hasReviewsPanel(page: Page): Promise<boolean> {
+async function hasReviewsPanelOpenMarker(page: Page): Promise<boolean> {
   const evidence = await getReviewPanelEvidence(page);
-  return evidence.positiveNoticeVisible || isNegativeReviewPanelReady(evidence);
+  return isReviewPanelOpenEvidence(evidence);
 }
 
 async function getRelevantExtractionText(page: Page): Promise<string> {
@@ -784,6 +815,42 @@ async function isRateLimited(page: Page): Promise<boolean> {
   return /ungewöhnlichen traffic|ungewöhnliche aktivität|unusual traffic|unusual activity|captcha|ich bin kein roboter/i.test(
     text,
   );
+}
+
+async function resetPersistentContextPages(context: BrowserContext): Promise<void> {
+  const pages = context.pages();
+  const keeper = pages[0] ?? (await context.newPage());
+
+  for (const page of pages.slice(1)) {
+    await page.close().catch(() => undefined);
+  }
+
+  if (!keeper.isClosed() && keeper.url() !== 'about:blank') {
+    await keeper.goto('about:blank', { waitUntil: 'domcontentloaded', timeout: 5_000 }).catch(() => undefined);
+  }
+}
+
+async function closeNewContributorPages(
+  context: BrowserContext,
+  existingPages: Set<Page>,
+  activePage: Page,
+): Promise<void> {
+  for (const candidate of context.pages()) {
+    if (candidate === activePage || existingPages.has(candidate)) {
+      continue;
+    }
+    if (isContributorUrl(candidate.url())) {
+      await candidate.close().catch(() => undefined);
+    }
+  }
+}
+
+function isContributorUrl(url: string): boolean {
+  return /\/maps\/contrib\//i.test(url);
+}
+
+function isPlaceDetailUrl(url: string): boolean {
+  return /\/maps\/place\//i.test(url) && !isContributorUrl(url);
 }
 
 async function installResourceBlocking(context: BrowserContext): Promise<void> {
