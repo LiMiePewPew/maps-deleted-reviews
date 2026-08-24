@@ -18,6 +18,7 @@ const VENUE_READY_TIMEOUT_MS = 12_000;
 const REVIEWS_READY_TIMEOUT_MS = 8_000;
 const NEGATIVE_NOTICE_SETTLE_MS = 1_800;
 const VENUE_POLL_MS = 180;
+const REVIEWS_POLL_MS = 200;
 const STATE_CHECKPOINT_EVERY = 5;
 const CSV_CHECKPOINT_EVERY = 25;
 const MAX_WORKERS = 8;
@@ -95,8 +96,6 @@ export async function runCityPipelineV3(
   const statePath = `output/state-${slug}-gastro-v3.json`;
   let state = await loadPipelineState(statePath, city, country);
 
-  // A fully clean completed run is a snapshot. Running again starts a new snapshot.
-  // Runs with partial/failed rows remain resumable so those venues can be retried.
   if (state.finishedAt) {
     state = createPipelineState(city, country);
     await savePipelineState(statePath, state);
@@ -312,8 +311,6 @@ async function runNoticePool(
           processedThisRun += 1;
           const done = state.venues.length - pending.length + processedThisRun;
           console.log(formatPipelineProgress(done, state.venues.length, row));
-
-          // Errors are persisted immediately; successful hot-path writes are batched.
           await persist(row.status !== 'ok');
         }
       }),
@@ -508,74 +505,39 @@ async function waitForVenueData(page: Page, timeoutMs: number): Promise<string> 
 }
 
 async function waitForCertifiedReviewsText(page: Page, timeoutMs: number): Promise<string | null> {
-  const raw = await page
-    .evaluate(
-      ({ timeout, negativeSettle }) =>
-        new Promise<string | null>((resolve) => {
-          const startedAt = Date.now();
-          let finished = false;
+  const deadline = Date.now() + timeoutMs;
+  let panelReadySince: number | null = null;
+  const snapshots: string[] = [];
 
-          const snapshot = (): string => {
-            const bodyText = document.body?.innerText ?? '';
-            const labels = Array.from(document.querySelectorAll('[aria-label]'))
-              .map((element) => element.getAttribute('aria-label') ?? '')
-              .filter((label) =>
-                /Rezension|Bewertung|Sterne|Reviews?|Stars?|Diffamierung|Sortieren|Neueste|Relevanteste|Newest|Most relevant|Sort/i.test(
-                  label,
-                ),
-              );
-            return [bodyText, ...labels].filter(Boolean).join(' ');
-          };
+  while (Date.now() < deadline) {
+    const latest = await getRelevantExtractionText(page);
+    if (latest && !snapshots.includes(latest)) {
+      snapshots.push(latest);
+      if (snapshots.length > 6) {
+        snapshots.shift();
+      }
+    }
 
-          const hasPanel = (text: string): boolean =>
-            /Beschwerden\s+wegen\s+Diffamierung\s+entfernt|Sortieren|Neueste|Relevanteste|Newest|Most relevant|Sort reviews/i.test(
-              text,
-            );
-          const hasPositiveNotice = (text: string): boolean =>
-            /Beschwerden\s+wegen\s+Diffamierung\s+entfernt/i.test(text);
+    const combined = normalizeWhitespace([...new Set(snapshots)].join(' '));
+    if (combined && parseDeletedReviews(combined) !== null) {
+      return combined;
+    }
 
-          const finish = (value: string | null): void => {
-            if (finished) {
-              return;
-            }
-            finished = true;
-            observer.disconnect();
-            clearInterval(interval);
-            clearTimeout(deadline);
-            resolve(value);
-          };
+    const panelVisible = await hasReviewsPanel(page);
+    const reviewCountReady = parseReviewCount(combined) !== null;
+    if (panelVisible && reviewCountReady) {
+      panelReadySince ??= Date.now();
+      if (Date.now() - panelReadySince >= NEGATIVE_NOTICE_SETTLE_MS) {
+        return combined;
+      }
+    } else {
+      panelReadySince = null;
+    }
 
-          const check = (): void => {
-            const text = snapshot();
-            if (!hasPanel(text)) {
-              return;
-            }
-            if (hasPositiveNotice(text)) {
-              finish(text);
-              return;
-            }
-            if (Date.now() - startedAt >= negativeSettle) {
-              finish(text);
-            }
-          };
+    await page.waitForTimeout(REVIEWS_POLL_MS).catch(() => undefined);
+  }
 
-          const observer = new MutationObserver(check);
-          observer.observe(document.body, {
-            subtree: true,
-            childList: true,
-            characterData: true,
-            attributes: true,
-            attributeFilter: ['aria-label'],
-          });
-          const interval = setInterval(check, 100);
-          const deadline = setTimeout(() => finish(null), timeout);
-          check();
-        }),
-      { timeout: timeoutMs, negativeSettle: NEGATIVE_NOTICE_SETTLE_MS },
-    )
-    .catch(() => null);
-
-  return raw ? normalizeWhitespace(raw) : null;
+  return null;
 }
 
 async function openReviewsPanel(page: Page): Promise<boolean> {
@@ -609,9 +571,6 @@ async function openReviewsPanel(page: Page): Promise<boolean> {
       }
     }
 
-    // Google Maps sometimes exposes a visible reviews control that is duplicated
-    // or not represented cleanly in the accessibility tree. Fall back to a DOM
-    // click, but only on visible button/tab elements containing a reviews label.
     const clickedViaDom = await clickVisibleReviewsControlViaDom(page);
     if (clickedViaDom && (await waitForReviewsPanelMarker(page, 2_500))) {
       return true;
