@@ -2,7 +2,7 @@
 
 Pipeline V3 is the high-performance large-city scan path used by `--full-gastro-scan`.
 
-It combines parallel discovery, indexed deduplication, resumable state, and conservative removal-notice certification. The current browser runtime uses CloakBrowser's patched Chromium with the existing Playwright page/locator API.
+It combines parallel discovery, indexed deduplication, resumable state, and conservative removal-notice certification. The current default browser runtime is Playwright Chromium, matching the known-working upstream architecture.
 
 ## Architecture
 
@@ -30,7 +30,7 @@ search terms
        CSV + positive CSV
 ```
 
-Discovery and notice checking use separate page pools.
+Discovery and notice checking use separate page pools inside one persistent Playwright browser context.
 
 ## Browser Runtime
 
@@ -39,13 +39,13 @@ The current stack is:
 ```text
 Pipeline V3
   -> Playwright Page / Locator API
-  -> CloakBrowser buildLaunchOptions + buildContextOptions
-  -> CloakBrowser patched Chromium
+  -> Playwright chromium.launchPersistentContext()
+  -> persistent Chromium profile
 ```
 
-The crawler launches CloakBrowser's binary through Playwright directly. This avoids the higher-level CloakBrowser launch wrapper that caused a Node heap OOM during the macOS migration while retaining the patched Chromium binary and CloakBrowser launch arguments.
+This restores the browser lifecycle used by the known-working upstream implementation. No Playwright browser method is monkeypatched.
 
-The additional CloakBrowser `humanize` JavaScript layer is currently disabled.
+CloakBrowser remains available only as an explicit experimental backend in `src/browserRuntime.ts`. It is not wired into the normal CLI path and must prove A/B parity against the Playwright baseline before promotion.
 
 ## What is faster
 
@@ -66,7 +66,7 @@ Pipeline V3 adds:
 - a shared rate-limit cooldown across detail workers;
 - separate discovery and notice timing metrics.
 
-The current removal-notice settle loop runs on the Node side with short DOM snapshots every 200 ms. A previous long-running browser-side MutationObserver implementation was removed after it failed to settle reliably under the CloakBrowser runtime.
+The current removal-notice settle loop runs on the Node side with short DOM snapshots every 200 ms. A previous long-running browser-side MutationObserver implementation was removed after it failed to settle reliably during the browser migration.
 
 A generic `Sortieren`, `Relevanteste`, or review count elsewhere on the venue page is not enough to certify a negative result. If Google visibly renders a defamation-removal notice that the parser cannot understand, the venue remains `partial` rather than degrading to a false negative.
 
@@ -74,7 +74,7 @@ The hot path never marks a venue `ok` unless rating, review count and strict rev
 
 ## Current Certification Status
 
-The pre-CloakBrowser known-good reference was:
+The known-good Playwright reference was:
 
 ```text
 Osnabrück, depth 1
@@ -95,11 +95,11 @@ Taste of India                  6-10
 HasAntep ÇiğKöfte Osnabrück     2-5
 ```
 
-During the CloakBrowser migration, four discovery workers completed the 20-term depth-1 Osnabrück discovery in about 12 seconds in one observed run, producing 19 unique venues from 20 raw slots. Venue ratings and visible review counts were available for all 19.
+During later V3 work, four discovery workers completed the 20-term depth-1 Osnabrück discovery in about 12 seconds in one observed run, producing 19 unique venues from 20 raw slots.
 
-A later run exposed a false-negative certification bug: all 19 venues returned `ok` while all known positive controls disappeared. Pipeline state version 2 invalidates those earlier results, and the negative-certification path now requires hydrated review-panel evidence instead of generic page text.
+A browser-migration run exposed a false-negative certification bug: all 19 venues returned `ok` while all known positive controls disappeared. Pipeline state version 2 invalidates those earlier results, and the negative-certification path now requires hydrated review-panel evidence instead of generic page text.
 
-Removal-notice parity is still being re-certified. Do not consider V3 fully certified until a clean live run returns `Partial: 0`, `Failed: 0`, and the positive controls are reproduced subject to legitimate changes in Google's live notices.
+The current task is to re-certify V3 on the restored Playwright runtime. Do not consider V3 fully certified until a clean live run returns `Partial: 0`, `Failed: 0`, and positive controls are reproduced subject to legitimate changes in Google's live notices.
 
 ## Commands
 
@@ -135,15 +135,6 @@ notice workers    = 3
 ```
 
 It does not enable headless mode.
-
-```bash
-npm start -- \
-  --city Osnabrück \
-  --country Germany \
-  --full-gastro-scan \
-  --depth 1 \
-  --turbo
-```
 
 Explicit worker flags override the turbo defaults.
 
