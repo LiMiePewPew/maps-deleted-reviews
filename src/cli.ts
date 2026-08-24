@@ -1,13 +1,38 @@
 import type { RawScraperConfig } from './types.js';
 
+export const FULL_GASTRO_SEARCH_TERMS = [
+  'restaurant',
+  'Cafe',
+  'bar',
+  'Hotel',
+  'Imbiss',
+  'Pizza',
+  'Döner',
+  'Sushi',
+  'Burger',
+  'Frühstück',
+  'Bäckerei',
+  'Eiscafe',
+  'italienisch',
+  'griechisch',
+  'indisch',
+  'asiatisch',
+  'vegan',
+  'Steakhouse',
+  'Pub',
+  'Cocktailbar',
+] as const;
+
 export interface CliArgs {
   configPath: string;
   overrides: RawScraperConfig;
+  fullGastroScan: boolean;
 }
 
 export function parseCliArgs(args: string[]): CliArgs {
   const overrides: RawScraperConfig = {};
   let configPath = 'config.json';
+  let fullGastroScan = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -43,8 +68,23 @@ export function parseCliArgs(args: string[]): CliArgs {
       index += 1;
       continue;
     }
+    if (arg === '--full-gastro-scan' || arg === '--large-list') {
+      fullGastroScan = true;
+      overrides.searchTerms = [...FULL_GASTRO_SEARCH_TERMS];
+      continue;
+    }
     if (arg === '--depth') {
       overrides.depth = Number(requireValue(arg, next));
+      index += 1;
+      continue;
+    }
+    if (arg === '--navigation-timeout-ms') {
+      overrides.navigationTimeoutMs = Number(requireValue(arg, next));
+      index += 1;
+      continue;
+    }
+    if (arg === '--max-result-scrolls') {
+      overrides.maxResultScrolls = Number(requireValue(arg, next));
       index += 1;
       continue;
     }
@@ -98,7 +138,7 @@ export function parseCliArgs(args: string[]): CliArgs {
     }
   }
 
-  return { configPath, overrides };
+  return { configPath, overrides, fullGastroScan };
 }
 
 function parseCommaSeparated(value: string): string[] {
