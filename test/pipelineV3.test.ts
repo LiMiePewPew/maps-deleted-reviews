@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { mergeDiscoveredVenuesFast, shouldBlockResourceType } from '../src/pipelineV3.js';
-import { isNegativeReviewPanelReady } from '../src/reviewPanelEvidence.js';
+import {
+  isNegativeReviewPanelReady,
+  isReviewPanelOpenEvidence,
+} from '../src/reviewPanelEvidence.js';
 
 describe('pipeline V3 discovery index', () => {
   it('deduplicates the same Maps place in O(1) index lookups', () => {
@@ -62,6 +65,38 @@ describe('pipeline V3 resource blocking', () => {
     expect(shouldBlockResourceType('script')).toBe(false);
     expect(shouldBlockResourceType('xhr')).toBe(false);
     expect(shouldBlockResourceType('fetch')).toBe(false);
+  });
+});
+
+describe('pipeline V3 review panel evidence', () => {
+  it('accepts a selected review tab as evidence that the panel opened', () => {
+    expect(
+      isReviewPanelOpenEvidence({
+        positiveNoticeVisible: false,
+        sortControlVisible: false,
+        selectedReviewTabVisible: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts the review sort control as panel-open evidence before cards hydrate', () => {
+    expect(
+      isReviewPanelOpenEvidence({
+        positiveNoticeVisible: false,
+        sortControlVisible: true,
+        selectedReviewTabVisible: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('does not claim the panel opened without review-specific evidence', () => {
+    expect(
+      isReviewPanelOpenEvidence({
+        positiveNoticeVisible: false,
+        sortControlVisible: false,
+        selectedReviewTabVisible: false,
+      }),
+    ).toBe(false);
   });
 });
 
