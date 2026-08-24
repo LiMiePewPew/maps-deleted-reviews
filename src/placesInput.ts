@@ -19,7 +19,19 @@ export async function seedScraperState(config: ScraperConfig, venues: Venue[]): 
     .map((part) => part.trim().toLowerCase())
     .join('::');
   let state = await loadOrCreateState(config.statePath, runKey);
+  const allowedUrls = new Set(venues.map((venue) => venue.url));
+
+  state.discoveredVenues = [];
   for (const venue of venues) upsertDiscoveredVenue(state, venue);
+  state.completedUrls = state.completedUrls.filter((url) => allowedUrls.has(url));
+  state.failedUrls = state.failedUrls.filter((url) => allowedUrls.has(url));
+  state.cursor = 0;
+  while (
+    state.cursor < state.discoveredVenues.length &&
+    state.completedUrls.includes(state.discoveredVenues[state.cursor]?.url ?? '')
+  ) {
+    state.cursor += 1;
+  }
 
   const completed = new Set(state.completedUrls);
   const fullyCompleted = venues.length > 0 && venues.every((venue) => completed.has(venue.url));
