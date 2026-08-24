@@ -28,6 +28,7 @@ export interface CliArgs {
   overrides: RawScraperConfig;
   fullGastroScan: boolean;
   workers: number;
+  placesFile?: string;
 }
 
 export function parseCliArgs(args: string[]): CliArgs {
@@ -35,6 +36,7 @@ export function parseCliArgs(args: string[]): CliArgs {
   let configPath = 'config.json';
   let fullGastroScan = false;
   let workers = 1;
+  let placesFile: string | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -73,6 +75,11 @@ export function parseCliArgs(args: string[]): CliArgs {
     if (arg === '--full-gastro-scan' || arg === '--large-list') {
       fullGastroScan = true;
       overrides.searchTerms = [...FULL_GASTRO_SEARCH_TERMS];
+      continue;
+    }
+    if (arg === '--places-file' || arg === '--gosom-results') {
+      placesFile = requireValue(arg, next);
+      index += 1;
       continue;
     }
     if (arg === '--workers') {
@@ -148,7 +155,11 @@ export function parseCliArgs(args: string[]): CliArgs {
     }
   }
 
-  return { configPath, overrides, fullGastroScan, workers };
+  if (placesFile && fullGastroScan) {
+    throw new Error('--places-file and --full-gastro-scan cannot be used together.');
+  }
+
+  return { configPath, overrides, fullGastroScan, workers, placesFile };
 }
 
 function parseCommaSeparated(value: string): string[] {
