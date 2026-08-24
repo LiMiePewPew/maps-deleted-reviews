@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCliArgs } from '../src/cli.js';
+import { FULL_GASTRO_SEARCH_TERMS, parseCliArgs } from '../src/cli.js';
 
 describe('parseCliArgs', () => {
   it('parses config path and single-search overrides', () => {
@@ -28,6 +28,7 @@ describe('parseCliArgs', () => {
         headed: false,
         sortCsv: false,
       },
+      fullGastroScan: false,
     });
   });
 
@@ -59,6 +60,23 @@ describe('parseCliArgs', () => {
       'Köln',
       'Düsseldorf',
     ]);
+  });
+
+  it('expands the full gastro scan preset', () => {
+    const parsed = parseCliArgs(['--city', 'Osnabrück', '--full-gastro-scan']);
+    expect(parsed.fullGastroScan).toBe(true);
+    expect(parsed.overrides.searchTerms).toEqual([...FULL_GASTRO_SEARCH_TERMS]);
+  });
+
+  it('parses large-scan timeout controls', () => {
+    const parsed = parseCliArgs([
+      '--navigation-timeout-ms',
+      '60000',
+      '--max-result-scrolls',
+      '120',
+    ]);
+    expect(parsed.overrides.navigationTimeoutMs).toBe(60_000);
+    expect(parsed.overrides.maxResultScrolls).toBe(120);
   });
 
   it('throws on missing flag values', () => {
