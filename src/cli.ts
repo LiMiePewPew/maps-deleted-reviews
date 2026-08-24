@@ -1,3 +1,4 @@
+import type { BrowserBackend } from './browserRuntime.js';
 import type { RawScraperConfig } from './types.js';
 
 export const FULL_GASTRO_SEARCH_TERMS = [
@@ -27,12 +28,14 @@ export interface CliArgs {
   configPath: string;
   overrides: RawScraperConfig;
   fullGastroScan: boolean;
+  browser: BrowserBackend;
 }
 
 export function parseCliArgs(args: string[]): CliArgs {
   const overrides: RawScraperConfig = {};
   let configPath = 'config.json';
   let fullGastroScan = false;
+  let browser: BrowserBackend = 'playwright';
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -40,6 +43,15 @@ export function parseCliArgs(args: string[]): CliArgs {
 
     if (arg === '--config' || arg === '-c') {
       configPath = requireValue(arg, next);
+      index += 1;
+      continue;
+    }
+    if (arg === '--browser') {
+      const value = requireValue(arg, next).toLowerCase();
+      if (value !== 'playwright' && value !== 'cloak') {
+        throw new Error('--browser must be either "playwright" or "cloak"');
+      }
+      browser = value;
       index += 1;
       continue;
     }
@@ -138,7 +150,7 @@ export function parseCliArgs(args: string[]): CliArgs {
     }
   }
 
-  return { configPath, overrides, fullGastroScan };
+  return { configPath, overrides, fullGastroScan, browser };
 }
 
 function parseCommaSeparated(value: string): string[] {
