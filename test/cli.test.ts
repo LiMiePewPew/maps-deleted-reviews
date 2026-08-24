@@ -29,6 +29,7 @@ describe('parseCliArgs', () => {
         sortCsv: false,
       },
       fullGastroScan: false,
+      placesFile: undefined,
     });
   });
 
@@ -66,6 +67,18 @@ describe('parseCliArgs', () => {
     const parsed = parseCliArgs(['--city', 'Osnabrück', '--full-gastro-scan']);
     expect(parsed.fullGastroScan).toBe(true);
     expect(parsed.overrides.searchTerms).toEqual([...FULL_GASTRO_SEARCH_TERMS]);
+  });
+
+  it('parses an external places file', () => {
+    const parsed = parseCliArgs(['--places-file', 'output/gosom.csv']);
+    expect(parsed.placesFile).toBe('output/gosom.csv');
+    expect(parsed.fullGastroScan).toBe(false);
+  });
+
+  it('rejects places-file together with full-gastro-scan', () => {
+    expect(() =>
+      parseCliArgs(['--places-file', 'output/gosom.csv', '--full-gastro-scan']),
+    ).toThrow(/cannot be used together/);
   });
 
   it('parses large-scan timeout controls', () => {
