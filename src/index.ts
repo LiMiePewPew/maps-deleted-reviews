@@ -5,6 +5,7 @@ import { browserDisplayName, installBrowserBackend } from './browserRuntime.js';
 import { parseCliArgs } from './cli.js';
 import { loadConfigs } from './config.js';
 import { mergeCsvFiles, writePositiveCsvFile } from './csvSort.js';
+import { fullGastroDepthFor } from './fullGastro.js';
 import { resetBatchVenueCache, runScraper } from './mapsScraper.js';
 import { formatRunSummary, writeRunSummary } from './summary.js';
 import type { ScraperConfig } from './types.js';
@@ -24,7 +25,14 @@ async function main(): Promise<void> {
     cli.overrides.navigationTimeoutMs = 60_000;
   }
 
-  const configs = await loadConfigs(configPath, cli.overrides);
+  const loadedConfigs = await loadConfigs(configPath, cli.overrides);
+  const configs =
+    cli.fullGastroScan && cli.overrides.depth === undefined
+      ? loadedConfigs.map((config) => ({
+          ...config,
+          depth: fullGastroDepthFor(config.searchTerm) ?? config.depth,
+        }))
+      : loadedConfigs;
   const cities = [...new Set(configs.map((config) => config.city))];
   if (cli.fullGastroScan && cities.length !== 1) {
     throw new Error('--full-gastro-scan currently supports exactly one city per invocation.');
@@ -37,7 +45,7 @@ async function main(): Promise<void> {
 
   for (const config of configs) {
     console.log(
-      `Scraping ${config.depth} "${config.searchTerm}" venues in ${config.city}, ${config.country}.`,
+      `Scraping up to ${config.depth} "${config.searchTerm}" venues in ${config.city}, ${config.country}.`,
     );
     console.log(`Output: ${config.outputCsvPath}`);
     console.log(`State: ${config.statePath}`);
