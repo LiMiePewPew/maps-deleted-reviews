@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { detectBlockerKind, detectBlockerText, shouldStartFreshRun } from '../src/mapsScraper.js';
+import {
+  detectBlockerKind,
+  detectBlockerText,
+  shouldCacheBatchVenue,
+  shouldStartFreshRun,
+} from '../src/mapsScraper.js';
 import type { ScrapedVenue, ScraperState } from '../src/types.js';
 
 describe('detectBlockerText', () => {
@@ -72,6 +77,39 @@ describe('shouldStartFreshRun', () => {
         rows,
         2,
       ),
+    ).toBe(false);
+  });
+});
+
+describe('shouldCacheBatchVenue', () => {
+  it('does not reuse a no-notice observation across search terms', () => {
+    expect(shouldCacheBatchVenue(rows[0]!)).toBe(false);
+  });
+
+  it('reuses a confirmed positive notice across search terms', () => {
+    expect(
+      shouldCacheBatchVenue({
+        ...rows[0]!,
+        deletedReviewsMin: 21,
+        deletedReviewsMax: 50,
+        deletedReviewsEstimate: 35.5,
+        deletedReviewNotice:
+          '21 bis 50 Bewertungen aufgrund von Beschwerden wegen Diffamierung entfernt.',
+      }),
+    ).toBe(true);
+  });
+
+  it('does not cache partial positives', () => {
+    expect(
+      shouldCacheBatchVenue({
+        ...rows[0]!,
+        status: 'partial',
+        deletedReviewsMin: 21,
+        deletedReviewsMax: 50,
+        deletedReviewsEstimate: 35.5,
+        deletedReviewNotice:
+          '21 bis 50 Bewertungen aufgrund von Beschwerden wegen Diffamierung entfernt.',
+      }),
     ).toBe(false);
   });
 });
