@@ -29,9 +29,6 @@ describe('parseCliArgs', () => {
         sortCsv: false,
       },
       fullGastroScan: false,
-      workers: 1,
-      discoveryWorkers: 1,
-      turbo: false,
     });
   });
 
@@ -69,25 +66,6 @@ describe('parseCliArgs', () => {
     const parsed = parseCliArgs(['--city', 'Osnabrück', '--full-gastro-scan']);
     expect(parsed.fullGastroScan).toBe(true);
     expect(parsed.overrides.searchTerms).toEqual([...FULL_GASTRO_SEARCH_TERMS]);
-  });
-
-  it('parses notice and discovery worker counts', () => {
-    const parsed = parseCliArgs(['--workers', '2', '--discovery-workers', '4']);
-    expect(parsed.workers).toBe(2);
-    expect(parsed.discoveryWorkers).toBe(4);
-    expect(() => parseCliArgs(['--workers', '0'])).toThrow(/between 1 and 8/);
-    expect(() => parseCliArgs(['--discovery-workers', '9'])).toThrow(/between 1 and 8/);
-  });
-
-  it('enables conservative turbo defaults while preserving explicit overrides', () => {
-    const turbo = parseCliArgs(['--turbo']);
-    expect(turbo.turbo).toBe(true);
-    expect(turbo.workers).toBe(3);
-    expect(turbo.discoveryWorkers).toBe(4);
-
-    const overridden = parseCliArgs(['--turbo', '--workers', '2']);
-    expect(overridden.workers).toBe(2);
-    expect(overridden.discoveryWorkers).toBe(4);
   });
 
   it('parses large-scan timeout controls', () => {
