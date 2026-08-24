@@ -29,7 +29,14 @@ describe('parseCliArgs', () => {
         sortCsv: false,
       },
       fullGastroScan: false,
+      browser: 'playwright',
     });
+  });
+
+  it('defaults to Playwright and parses the experimental CloakBrowser backend', () => {
+    expect(parseCliArgs([]).browser).toBe('playwright');
+    expect(parseCliArgs(['--browser', 'cloak']).browser).toBe('cloak');
+    expect(() => parseCliArgs(['--browser', 'other'])).toThrow(/playwright.*cloak/i);
   });
 
   it('parses the CSV sorting flag', () => {
