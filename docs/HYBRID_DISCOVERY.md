@@ -60,6 +60,20 @@ GOSOM_DEPTH=3 \
 
 Do not raise concurrency blindly. Google blocking can make a nominally faster configuration slower or less complete.
 
+## Stronger city coverage with grid discovery
+
+Normal Google Maps searches return ranked result sets and do not guarantee every business in a city. gosom can optionally split a geographic bounding box into cells and run discovery across the grid.
+
+```bash
+GOSOM_BIN=/path/to/google-maps-scraper \
+GOSOM_GRID_BBOX="minLat,minLon,maxLat,maxLon" \
+GOSOM_GRID_CELL=1.0 \
+GOSOM_ZOOM=16 \
+  bash scripts/hybrid-gastro-scan.sh Osnabrück Germany
+```
+
+The hybrid script passes these values to gosom's `-grid-bbox`, `-grid-cell`, and `-zoom` options. Grid discovery improves coverage but gosom documents that results are not strictly clipped to the supplied box, so downstream deduplication remains necessary.
+
 ## Feed an existing gosom file directly
 
 CSV:
@@ -108,4 +122,4 @@ GOSOM_BIN=/path/to/google-maps-scraper \
 
 ## Coverage
 
-A large query list improves coverage but does not mathematically guarantee every business in a city. For stronger geographic coverage, gosom also supports grid/bounding-box discovery. That can be added as the next stage after the basic hybrid pipeline is locally certified.
+A large query list improves coverage but does not mathematically guarantee every business in a city. Grid discovery is the preferred next step when coverage matters more than a quick ranked sample.
