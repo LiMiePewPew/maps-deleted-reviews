@@ -1,5 +1,19 @@
-import { describe, expect, it } from 'vitest';
-import { parsePlacesText } from '../src/placesInput.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { parsePlacesText, seedScraperState } from '../src/placesInput.js';
+import { loadOrCreateState, markVenueCompleted, saveState } from '../src/state.js';
+import type { ScraperConfig, Venue } from '../src/types.js';
+
+let tempDir: string | undefined;
+
+afterEach(async () => {
+  if (tempDir) {
+    await rm(tempDir, { recursive: true, force: true });
+    tempDir = undefined;
+  }
+});
 
 describe('parsePlacesText', () => {
   it('parses gosom CSV output and deduplicates normalized Maps URLs', () => {
@@ -48,3 +62,54 @@ describe('parsePlacesText', () => {
     expect(() => parsePlacesText('title,address\nA,B', '.csv')).toThrow(/link\/url/);
   });
 });
+
+describe('seedScraperState', () => {
+  it('keeps incomplete imported runs resumable but resets fully completed imports', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'maps-places-input-'));
+    const config = makeConfig(join(tempDir, 'state.json'));
+    const venues: Venue[] = [
+      { name: 'Alpha', url: 'https://google.com/maps/place/Alpha' },
+      { name: 'Beta', url: 'https://google.com/maps/place/Beta' },
+    ];
+
+    expect(await seedScraperState(config, venues)).toBe(false);
+
+    const partial = await loadOrCreateState(config.statePath, 'osnabrück::germany::places');
+    markVenueCompleted(partial, venues[0].url);
+    await saveState(config.statePath, partial);
+
+    expect(await seedScraperState(config, venues)).toBe(false);
+    const resumed = await loadOrCreateState(config.statePath, 'osnabrück::germany::places');
+    expect(resumed.completedUrls).toEqual([venues[0].url]);
+
+    markVenueCompleted(resumed, venues[1].url);
+    await saveState(config.statePath, resumed);
+
+    expect(await seedScraperState(config, venues)).toBe(true);
+    const refreshed = await loadOrCreateState(config.statePath, 'osnabrück::germany::places');
+    expect(refreshed.completedUrls).toEqual([]);
+    expect(refreshed.discoveredVenues).toEqual(venues);
+  });
+});
+
+function makeConfig(statePath: string): ScraperConfig {
+  return {
+    city: 'Osnabrück',
+    country: 'Germany',
+    searchTerm: 'places',
+    depth: 2,
+    locale: 'de-DE',
+    googleMapsUrl: 'https://www.google.de/maps',
+    headed: true,
+    resumeMode: 'pause',
+    outputCsvPath: 'output/test.csv',
+    summaryPath: 'output/test-summary.json',
+    statePath,
+    browserProfileDir: '.playwright-profile',
+    navigationTimeoutMs: 60_000,
+    actionDelay: { minMs: 0, maxMs: 0 },
+    resultScrollDelayMs: 250,
+    maxResultScrolls: 80,
+    sortCsv: true,
+  };
+}
