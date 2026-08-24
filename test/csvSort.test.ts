@@ -50,7 +50,7 @@ describe('mergeCsvFiles', () => {
     expect(rows[0]).toContain(',120,1,50,30,');
   });
 
-  it('falls back to normalized name and address when no Maps place URL exists', async () => {
+  it('falls back to normalized name and address when no URL exists', async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'maps-merge-name-'));
     const firstPath = join(tempDir, 'first.csv');
     const secondPath = join(tempDir, 'second.csv');
@@ -59,12 +59,12 @@ describe('mergeCsvFiles', () => {
       'venue_type,name,total_reviews,deleted_reviews_min,deleted_reviews_max,percentage_deleted,current_star_rating,real_score,review_notice,url,address,deleted_reviews_estimate,status,error,scraped_at';
     await writeFile(
       firstPath,
-      `${header}\nCafe,Alpha,100,0,0,0,4.8,4.8,,https://example.com/a,Main 1,0,ok,,2026-04-30T09:00:00.000Z\n`,
+      `${header}\nCafe,Alpha,100,0,0,0,4.8,4.8,,,Main 1,0,ok,,2026-04-30T09:00:00.000Z\n`,
       'utf8',
     );
     await writeFile(
       secondPath,
-      `${header}\nBar, alpha ,101,0,0,0,4.8,4.8,,https://example.com/b,Main 1,0,ok,,2026-04-30T09:10:00.000Z\n`,
+      `${header}\nBar, alpha ,101,0,0,0,4.8,4.8,,,Main 1,0,ok,,2026-04-30T09:10:00.000Z\n`,
       'utf8',
     );
 
