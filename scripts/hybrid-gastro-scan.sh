@@ -14,7 +14,15 @@ GOSOM_DEPTH="${GOSOM_DEPTH:-2}"
 NOTICE_HEADLESS="${NOTICE_HEADLESS:-0}"
 
 mkdir -p output
-SAFE_CITY=$(printf '%s' "$CITY" | tr '[:upper:]' '[:lower:]' | sed 's/[^[:alnum:]]\{1,\}/-/g; s/^-//; s/-$//')
+SAFE_CITY=$(python3 - "$CITY" <<'PY'
+import re
+import sys
+import unicodedata
+value = unicodedata.normalize('NFKD', sys.argv[1])
+value = ''.join(ch for ch in value if not unicodedata.combining(ch)).lower()
+print(re.sub(r'[^a-z0-9]+', '-', value).strip('-'))
+PY
+)
 QUERY_FILE="output/gosom-${SAFE_CITY}-queries.txt"
 DISCOVERY_FILE="output/gosom-${SAFE_CITY}-discovery.csv"
 
