@@ -520,7 +520,7 @@ async function waitForCertifiedReviewsText(page: Page, timeoutMs: number): Promi
             const labels = Array.from(document.querySelectorAll('[aria-label]'))
               .map((element) => element.getAttribute('aria-label') ?? '')
               .filter((label) =>
-                /Rezension|Bewertung|Sterne|Reviews?|Stars?|Diffamierung|Sortieren|Neueste|Relevanteste/i.test(
+                /Rezension|Bewertung|Sterne|Reviews?|Stars?|Diffamierung|Sortieren|Neueste|Relevanteste|Newest|Most relevant|Sort/i.test(
                   label,
                 ),
               );
@@ -528,7 +528,9 @@ async function waitForCertifiedReviewsText(page: Page, timeoutMs: number): Promi
           };
 
           const hasPanel = (text: string): boolean =>
-            /Sortieren|Neueste|Relevanteste|Reviews|Rezensionen|Bewertungen/i.test(text);
+            /Beschwerden\s+wegen\s+Diffamierung\s+entfernt|Sortieren|Neueste|Relevanteste|Newest|Most relevant|Sort reviews/i.test(
+              text,
+            );
           const hasPositiveNotice = (text: string): boolean =>
             /Beschwerden\s+wegen\s+Diffamierung\s+entfernt/i.test(text);
 
@@ -577,44 +579,111 @@ async function waitForCertifiedReviewsText(page: Page, timeoutMs: number): Promi
 }
 
 async function openReviewsPanel(page: Page): Promise<boolean> {
-  const candidates = [
-    page.getByRole('tab', { name: /Rezensionen|Bewertungen|Reviews/i }).first(),
-    page.getByRole('button', { name: /Rezensionen|Bewertungen|Reviews/i }).first(),
-    page.locator('[aria-label*="Rezensionen"], [aria-label*="Bewertungen"], [aria-label*="Reviews"]').first(),
-    page.getByText(/^Rezensionen$|^Bewertungen$|^Reviews$/i).first(),
+  if (await hasReviewsPanel(page)) {
+    return true;
+  }
+
+  const candidateGroups: Locator[] = [
+    page.getByRole('tab', { name: /Rezensionen|Bewertungen|Reviews/i }),
+    page.getByRole('button', { name: /Rezensionen|Bewertungen|Reviews/i }),
+    page.locator(
+      '[role="tab"][aria-label*="Rezension"], [role="tab"][aria-label*="Bewertung"], [role="tab"][aria-label*="Review"], button[aria-label*="Rezension"], button[aria-label*="Bewertung"], button[aria-label*="Review"]',
+    ),
+    page.getByText(/^(?:Rezensionen|Bewertungen|Reviews)(?:\s.*)?$/i),
   ];
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    for (const candidate of candidates) {
-      if ((await candidate.count()) === 0 || !(await candidate.isVisible().catch(() => false))) {
-        continue;
-      }
-      await candidate.click().catch(() => undefined);
-      if (await waitForReviewsPanelMarker(page, 2_000)) {
-        return true;
+    for (const group of candidateGroups) {
+      const count = Math.min(await group.count().catch(() => 0), 12);
+      for (let index = 0; index < count; index += 1) {
+        const candidate = group.nth(index);
+        if (!(await candidate.isVisible().catch(() => false))) {
+          continue;
+        }
+
+        await candidate.scrollIntoViewIfNeeded().catch(() => undefined);
+        await candidate.click({ timeout: 1_500 }).catch(() => undefined);
+        if (await waitForReviewsPanelMarker(page, 2_500)) {
+          return true;
+        }
       }
     }
-    await page.waitForTimeout(250).catch(() => undefined);
+
+    // Google Maps sometimes exposes a visible reviews control that is duplicated
+    // or not represented cleanly in the accessibility tree. Fall back to a DOM
+    // click, but only on visible button/tab elements containing a reviews label.
+    const clickedViaDom = await clickVisibleReviewsControlViaDom(page);
+    if (clickedViaDom && (await waitForReviewsPanelMarker(page, 2_500))) {
+      return true;
+    }
+
+    await page.waitForTimeout(300).catch(() => undefined);
   }
 
   return hasReviewsPanel(page);
 }
 
-async function waitForReviewsPanelMarker(page: Page, timeoutMs: number): Promise<boolean> {
+async function clickVisibleReviewsControlViaDom(page: Page): Promise<boolean> {
   return page
-    .getByText(/Bewertungen aufgrund von Beschwerden wegen Diffamierung entfernt|Sortieren|Neueste|Relevanteste/i)
-    .first()
-    .waitFor({ state: 'attached', timeout: timeoutMs })
-    .then(() => true)
+    .evaluate(() => {
+      const labelPattern = /Rezensionen|Bewertungen|Reviews/i;
+      const candidates = Array.from(
+        document.querySelectorAll<HTMLElement>('button, [role="tab"]'),
+      );
+      const visible = candidates.filter((element) => {
+        const label = `${element.getAttribute('aria-label') ?? ''} ${element.textContent ?? ''}`;
+        if (!labelPattern.test(label)) {
+          return false;
+        }
+        const rect = element.getBoundingClientRect();
+        const style = window.getComputedStyle(element);
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          style.pointerEvents !== 'none'
+        );
+      });
+
+      const candidate = visible[0];
+      if (!candidate) {
+        return false;
+      }
+      candidate.scrollIntoView({ block: 'center', inline: 'center' });
+      candidate.click();
+      return true;
+    })
     .catch(() => false);
 }
 
+async function waitForReviewsPanelMarker(page: Page, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await hasReviewsPanel(page)) {
+      return true;
+    }
+    await page.waitForTimeout(100).catch(() => undefined);
+  }
+  return false;
+}
+
 async function hasReviewsPanel(page: Page): Promise<boolean> {
-  return page
-    .getByText(/Bewertungen aufgrund von Beschwerden wegen Diffamierung entfernt|Sortieren|Neueste|Relevanteste/i)
-    .first()
-    .isVisible({ timeout: 400 })
-    .catch(() => false);
+  const text = await page
+    .evaluate(() => {
+      const body = document.body?.innerText ?? '';
+      const labels = Array.from(document.querySelectorAll('[aria-label]'))
+        .map((element) => element.getAttribute('aria-label') ?? '')
+        .filter((label) =>
+          /Diffamierung|Sortieren|Neueste|Relevanteste|Newest|Most relevant|Sort reviews/i.test(label),
+        );
+      return [body, ...labels].join(' ');
+    })
+    .catch(() => '');
+
+  return /Beschwerden\s+wegen\s+Diffamierung\s+entfernt|Sortieren|Neueste|Relevanteste|Newest|Most relevant|Sort reviews/i.test(
+    normalizeWhitespace(text),
+  );
 }
 
 async function getRelevantExtractionText(page: Page): Promise<string> {
@@ -865,7 +934,7 @@ function formatPipelineProgress(done: number, total: number, row: ScrapedVenue):
     ? `${row.deletedReviewsMin}-${row.deletedReviewsMax} notice`
     : row.status === 'ok'
       ? 'no notice observed'
-      : row.status;
+      : `${row.status}${row.error ? ` (${row.error})` : ''}`;
   return `[${done}/${total}] ${row.name} | ${reviews} | ${notice}`;
 }
 
