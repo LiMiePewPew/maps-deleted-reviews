@@ -5,12 +5,34 @@ import { parseCliArgs } from './cli.js';
 import { loadConfigs } from './config.js';
 import { mergeCsvFiles, writePositiveCsvFile } from './csvSort.js';
 import { resetBatchVenueCache, runScraper } from './mapsScraper.js';
+import { loadVenuesFromFile, seedScraperState } from './placesInput.js';
 import { formatRunSummary, writeRunSummary } from './summary.js';
+import type { Venue } from './types.js';
 
 async function main(): Promise<void> {
   const cli = parseCliArgs(process.argv.slice(2));
   const configPath = cli.configPath;
   await ensureConfigExists(configPath);
+
+  let importedVenues: Venue[] | undefined;
+  if (cli.placesFile) {
+    importedVenues = await loadVenuesFromFile(cli.placesFile);
+    if (importedVenues.length === 0) {
+      throw new Error(`No usable venues found in ${cli.placesFile}.`);
+    }
+
+    const requestedDepth = cli.overrides.depth;
+    if (requestedDepth !== undefined) {
+      importedVenues = importedVenues.slice(0, requestedDepth);
+    }
+
+    cli.overrides.searchTerm = 'places';
+    cli.overrides.searchTerms = undefined;
+    cli.overrides.depth = importedVenues.length;
+    if (cli.overrides.navigationTimeoutMs === undefined) {
+      cli.overrides.navigationTimeoutMs = 60_000;
+    }
+  }
 
   if (cli.fullGastroScan && cli.overrides.navigationTimeoutMs === undefined) {
     cli.overrides.navigationTimeoutMs = 60_000;
@@ -21,6 +43,9 @@ async function main(): Promise<void> {
   if (cli.fullGastroScan && cities.length !== 1) {
     throw new Error('--full-gastro-scan currently supports exactly one city per invocation.');
   }
+  if (importedVenues && configs.length !== 1) {
+    throw new Error('--places-file requires exactly one city/config per invocation.');
+  }
 
   resetBatchVenueCache();
 
@@ -28,9 +53,14 @@ async function main(): Promise<void> {
   const candidateOutputPaths = new Set<string>();
 
   for (const config of configs) {
-    console.log(
-      `Scraping ${config.depth} "${config.searchTerm}" venues in ${config.city}, ${config.country}.`,
-    );
+    if (importedVenues) {
+      await seedScraperState(config, importedVenues);
+      console.log(`Checking ${importedVenues.length} imported Google Maps venues.`);
+    } else {
+      console.log(
+        `Scraping ${config.depth} "${config.searchTerm}" venues in ${config.city}, ${config.country}.`,
+      );
+    }
     console.log(`Output: ${config.outputCsvPath}`);
     console.log(`State: ${config.statePath}`);
 
@@ -39,6 +69,13 @@ async function main(): Promise<void> {
       await writeRunSummary(summary);
       console.log(formatRunSummary(summary));
       candidateOutputPaths.add(config.outputCsvPath);
+
+      if (importedVenues) {
+        const positivePath = config.outputCsvPath.replace(/\.csv$/i, '-positive.csv');
+        const positiveVenues = await writePositiveCsvFile(config.outputCsvPath, positivePath);
+        console.log(`Removal-notice CSV: ${positivePath}`);
+        console.log(`Venues with notices: ${positiveVenues}`);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       failures.push({ searchTerm: config.searchTerm, message });
