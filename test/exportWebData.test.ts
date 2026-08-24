@@ -39,8 +39,8 @@ describe('web data export', () => {
     const dataset = buildWebDataset(
       [
         'venue_type,name,total_reviews,deleted_reviews_min,deleted_reviews_max,percentage_deleted,current_star_rating,review_notice,url,address,status,error,scraped_at',
-        'Cafe,Partial Cafe,,0,0,,,,https://example.com,,,partial,,2026-08-24T21:00:00.000Z',
-        'Bar,Failed Bar,,0,0,,,,https://example.com/2,,,failed,Navigation failed,2026-08-24T21:01:00.000Z',
+        'Cafe,Partial Cafe,,0,0,,,,https://example.com,,partial,,2026-08-24T21:00:00.000Z',
+        'Bar,Failed Bar,,0,0,,,,https://example.com/2,,failed,Navigation failed,2026-08-24T21:01:00.000Z',
       ].join('\n'),
     );
 
