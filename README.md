@@ -2,7 +2,9 @@
 
 High-performance Node.js scraper for collecting Google Maps transparency notices about reviews removed after complaints regarding defamation.
 
-The current large-scan path uses **CloakBrowser's patched Chromium**, the Playwright page/locator API, parallel Google Maps discovery, venue deduplication, resumable state, and a conservative review-notice certification step.
+The current certified runtime is **Playwright Chromium**, matching the known-working upstream architecture. Pipeline V3 adds parallel discovery, venue deduplication, resumable state, worker pools, and conservative review-notice certification without replacing Playwright globally.
+
+CloakBrowser remains in the repository as an **experimental backend only**. It is not wired into the default CLI path and no longer monkeypatches Playwright.
 
 > **Important:** a Google removal notice is not an exact count of every review ever removed from a business. Treat the displayed range as Google-provided transparency information for the notice shown in the current Maps UI.
 
@@ -10,27 +12,22 @@ The current large-scan path uses **CloakBrowser's patched Chromium**, the Playwr
 
 The project has two execution paths:
 
-- **Pipeline V3** for `--full-gastro-scan` / `--large-list`. This is the current high-performance path.
-- **Legacy single/batch search** for `--search-term`, `--search-terms`, and older config-driven runs.
+- **Pipeline V3** for `--full-gastro-scan` / `--large-list`. This is the high-performance city-scan path.
+- **Legacy single/batch search** for `--search-term`, `--search-terms`, and config-driven runs.
 
-Current V3 browser stack:
+Current default browser stack:
 
 ```text
 crawler
   -> Playwright page/locator API
-  -> CloakBrowser launch options
-  -> CloakBrowser patched Chromium
+  -> Playwright chromium.launchPersistentContext()
+  -> persistent Chromium profile
   -> Google Maps
 ```
 
-Verified during the CloakBrowser migration:
+This intentionally returns the browser lifecycle to the working upstream model. CloakBrowser experiments are isolated in `src/browserRuntime.ts` and must prove parity before being promoted into the normal crawler path.
 
-- CloakBrowser Pro Chromium 150 starts successfully on Apple Silicon macOS.
-- Four parallel discovery workers successfully completed the 20-term Osnabrück depth-1 discovery scan.
-- The 20 searches produced 19 unique venues from 20 raw discovery slots in about 12 seconds in one observed run.
-- Rating and visible review-count extraction worked for all 19 discovered venues in that run.
-
-**Removal-notice parity is currently being re-certified after the browser migration.** The latest review-panel settle implementation uses short Node-side polling rather than a long-running browser-side MutationObserver. Do not treat a V3 run as fully certified unless it finishes with `Partial: 0`, `Failed: 0`, and known positive controls still reproduce their Google notices.
+A V3 run is not considered notice-certified unless it finishes with `Partial: 0`, `Failed: 0`, and known positive controls still reproduce their Google notices.
 
 ## What the Google Notice Means
 
@@ -68,54 +65,29 @@ A missing notice should be described as **"no Google removal notice observed"**,
 
 - Node.js 20 or newer
 - npm
-- macOS, Linux, or another CloakBrowser-supported desktop environment
-- a desktop session for the currently recommended headed mode
+- Playwright Chromium
+- a desktop session for the currently recommended headed validation mode
 
-The project currently pins:
+The project currently includes:
 
 ```text
-cloakbrowser 0.5.8
+playwright ^1.59.1
+cloakbrowser 0.5.8 (experimental only)
 ```
 
-Playwright remains installed because the crawler uses its Page, Locator, BrowserContext, routing, and navigation APIs. The browser binary itself is CloakBrowser's patched Chromium.
-
 ## Installation
-
-Clone the repository and install dependencies:
 
 ```bash
 npm install
 ```
 
-You do not need `npx playwright install chromium` for the CloakBrowser path.
-
-### CloakBrowser key
-
-CloakBrowser can manage the key outside the repository:
+If Chromium is not already installed for Playwright:
 
 ```bash
-npx cloakbrowser login YOUR_KEY
+npx playwright install chromium
 ```
 
-Then inspect the installation:
-
-```bash
-npx cloakbrowser info
-```
-
-The default key location is:
-
-```text
-~/.cloakbrowser/license.key
-```
-
-You can alternatively provide a key through the environment:
-
-```bash
-export CLOAKBROWSER_LICENSE_KEY="YOUR_KEY"
-```
-
-Never commit the key to this repository, `config.json`, source files, or Git history.
+CloakBrowser is not required for the default crawler path.
 
 ## Recommended Smoke Test
 
@@ -141,9 +113,7 @@ npm start -- \
 Expected startup:
 
 ```text
-Browser: CloakBrowser
-CloakBrowser: launching headed (..., pro, direct Playwright integration)...
-CloakBrowser: started
+Browser: Playwright Chromium
 
 === PHASE 1: DISCOVERY (4 workers) ===
 ```
@@ -155,7 +125,7 @@ Partial: 0
 Failed: 0
 ```
 
-If either value is non-zero, inspect the printed per-venue error before using the output as data.
+The stronger requirement is positive-control parity. A clean technical summary is not enough if known notices unexpectedly disappear.
 
 ## Pipeline V3
 
@@ -255,12 +225,6 @@ Discovery workers:
 
 Both accept integer values from 1 to 8.
 
-Current performance shorthand:
-
-```bash
---turbo
-```
-
 `--turbo` currently means:
 
 ```text
@@ -284,17 +248,6 @@ npm start -- \
   --depth 50 \
   --discovery-workers 4 \
   --workers 2
-```
-
-Or, after the current turbo settings have been validated:
-
-```bash
-npm start -- \
-  --city Osnabrück \
-  --country Germany \
-  --full-gastro-scan \
-  --depth 50 \
-  --turbo
 ```
 
 `depth` is the maximum number of venues requested **per search term**, before cross-term deduplication.
@@ -331,26 +284,11 @@ output/state-osnabruck-gastro-v3.json
 
 The positive CSV contains only rows where a Google removal notice was actually parsed.
 
-V3 prints metrics including:
-
-```text
-Raw discovery slots
-Unique venues
-Dedupe saved detail checks
-Checked venues
-Removal notices
-Partial
-Failed
-Discovery workers
-Notice workers
-Discovery runtime
-Notice runtime
-Total runtime
-```
+V3 prints metrics including raw discovery slots, unique venues, dedupe savings, checked venues, removal notices, partial/failed counts, worker counts, and phase runtimes.
 
 ## Known Positive Controls
 
-Before the CloakBrowser migration, the certified Osnabrück depth-1 baseline contained 19 unique venues, 6 removal notices, 0 partial rows, and 0 failed rows.
+The certified pre-Cloak Osnabrück depth-1 baseline contained 19 unique venues, 6 removal notices, 0 partial rows, and 0 failed rows.
 
 Known positive controls included:
 
@@ -375,11 +313,11 @@ Headless remains opt-in:
 --headless
 ```
 
-Do not assume headless parity until a headed and headless run over the same venue set reproduce the same review counts, notice rows, partial count, and failed count.
+Do not assume headless parity until headed and headless runs over the same venue set reproduce the same review counts, notice rows, partial count, and failed count.
 
 ## Legacy / Targeted Search
 
-For a targeted query instead of the full V3 gastro pipeline:
+For a targeted query:
 
 ```bash
 npm start -- \
@@ -399,71 +337,7 @@ npm start -- \
   --depth 50
 ```
 
-Multiple cities:
-
-```bash
-npm start -- \
-  --cities Bonn,Köln,Düsseldorf \
-  --country Germany \
-  --search-term Hotel \
-  --depth 50
-```
-
-These commands use the older config/batch orchestration rather than the V3 full-gastro city pipeline.
-
-## Configuration File
-
-The legacy/config-driven path can still use `config.json`:
-
-```bash
-cp config.example.json config.json
-```
-
-Example:
-
-```json
-{
-  "city": "Bonn",
-  "country": "Germany",
-  "searchTerm": "restaurant",
-  "depth": 50,
-  "resumeMode": "pause"
-}
-```
-
-Run it with:
-
-```bash
-npm start -- --config config.json
-```
-
-CLI values override the config file where applicable.
-
-Useful flags include:
-
-```text
---city
---cities
---country
---search-term
---search-terms
---full-gastro-scan
---large-list
---depth
---workers
---discovery-workers
---turbo
---navigation-timeout-ms
---max-result-scrolls
---headed
---headless
---output-csv-path
---merge-csv-path
---state-path
---summary-path
---sort-csv
---no-sort-csv
-```
+These commands use the older config/batch orchestration and retain the upstream-style Playwright persistent-context lifecycle.
 
 ## CSV Columns
 
@@ -487,19 +361,11 @@ error
 scraped_at
 ```
 
-`status` can include:
-
-```text
-ok
-partial
-failed
-```
-
-A `partial` row must not be interpreted as a confirmed negative removal-notice result.
+`status` can be `ok`, `partial`, or `failed`. A `partial` row must not be interpreted as a confirmed negative removal-notice result.
 
 ## Deleted Review Estimate
 
-Google commonly exposes ranges rather than exact values. The scraper stores the parsed minimum and maximum and may calculate an estimate for metrics.
+Google commonly exposes ranges rather than exact values. The scraper stores the parsed minimum and maximum and may calculate an estimate for derived metrics.
 
 Any metric based on `deleted_reviews_estimate` is therefore derived, not an official exact Google count.
 
@@ -514,42 +380,29 @@ Any metric based on `deleted_reviews_estimate` is therefore derived, not an offi
 
 This is a scenario calculation only. It is **not** Google's hidden rating, proof of manipulation, or a factual reconstruction of removed reviews.
 
-## Selector Strategy
+## CloakBrowser Experiments
 
-The crawler avoids depending primarily on Google Maps' obfuscated CSS class names.
+CloakBrowser is deliberately isolated from the default runtime after the migration produced browser-lifecycle regressions and a recursive persistent-launch loop.
 
-It prefers:
+`src/browserRuntime.ts` exposes an explicit experimental launcher. It does not modify Playwright globally. Any future CloakBrowser promotion should be based on an A/B test using the same venues, same review interaction, same parser, and the Playwright positive-control baseline.
 
-- accessible roles such as tabs, buttons, feeds, and links;
-- visible German/English labels;
-- Maps place URLs and stable identity tokens where available;
-- targeted DOM extraction;
-- regex parsing for review counts, ratings, and removal notices.
+See:
 
-Google can change its UI at any time. A clean browser launch is not sufficient evidence that extraction is still correct; positive-control parity remains important.
+```text
+docs/CLOAKBROWSER.md
+```
 
 ## Rate Limits and Challenges
 
 The crawler detects common Google challenge/rate-limit text and does not include CAPTCHA solving or automatic challenge bypass logic.
 
-When scaling worker counts, monitor:
-
-```text
-Partial
-Failed
-CAPTCHA/rate-limit errors
-notice parity
-```
-
-More workers are only useful if data quality remains stable.
+When scaling worker counts, monitor partial results, failures, challenge errors, and positive-control parity. More workers are only useful if data quality remains stable.
 
 ## Performance Notes
 
-Moving CPU-bound code to Rust is unlikely to be the main performance lever here. Most runtime is browser navigation, Google Maps rendering, result discovery, and review-panel hydration.
+Moving CPU-bound code to Rust is unlikely to be the main performance lever. Most runtime is browser navigation, Google Maps rendering, result discovery, and review-panel hydration.
 
-The main implemented speedups are therefore browser/pipeline changes rather than language changes.
-
-A future high-value research direction is structured network/RPC extraction: if the same Google removal notice can be reliably reproduced from a stable Maps response, detail-page rendering may be reduced substantially. This is not used as production evidence until it proves parity with known positive controls.
+A future high-value research direction is structured network/RPC extraction, but it should not replace the browser evidence path until it proves parity with known positive controls.
 
 ## Responsible Use
 
@@ -576,13 +429,12 @@ npm run build
 
 The project intentionally does not require heavy GitHub Actions usage for routine local crawler validation.
 
-Source code lives in `src/` and tests in `test/`.
-
-Further pipeline notes are in:
+Further notes:
 
 ```text
 docs/PIPELINE_V3.md
 docs/LARGE_SCAN.md
+docs/CLOAKBROWSER.md
 ```
 
 ## License
