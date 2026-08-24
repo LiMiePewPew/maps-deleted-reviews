@@ -1,11 +1,21 @@
 import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
-import type { Venue } from './types.js';
+import { loadOrCreateState, saveState, upsertDiscoveredVenue } from './state.js';
+import type { ScraperConfig, Venue } from './types.js';
 import { venueIdentityKey } from './venueIdentity.js';
 
 export async function loadVenuesFromFile(path: string): Promise<Venue[]> {
   const raw = await readFile(path, 'utf8');
   return parsePlacesText(raw, extname(path).toLowerCase());
+}
+
+export async function seedScraperState(config: ScraperConfig, venues: Venue[]): Promise<void> {
+  const runKey = [config.city, config.country, config.searchTerm]
+    .map((part) => part.trim().toLowerCase())
+    .join('::');
+  const state = await loadOrCreateState(config.statePath, runKey);
+  for (const venue of venues) upsertDiscoveredVenue(state, venue);
+  await saveState(config.statePath, state);
 }
 
 export function parsePlacesText(raw: string, extension = '.csv'): Venue[] {
