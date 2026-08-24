@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b1220" />
+    <meta
+      name="description"
+      content="Öffentliche Google-Maps-Transparenzhinweise zu entfernten Bewertungen in Osnabrück, übersichtlich aufbereitet."
+    />
+    <title>Review Transparency · Osnabrück</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <a class="brand" href="./" aria-label="Review Transparency Startseite">
+          <span class="brand-mark" aria-hidden="true">RT</span>
+          <span>
+            <strong>Review Transparency</strong>
+            <small>Osnabrück</small>
+          </span>
+        </a>
+        <a
+          class="ghost-link"
+          href="https://github.com/LiMiePewPew/maps-deleted-reviews"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Methodik & Code
+          <span aria-hidden="true">↗</span>
+        </a>
+      </header>
+
+      <main>
+        <section class="hero">
+          <div class="hero-glow hero-glow-a" aria-hidden="true"></div>
+          <div class="hero-glow hero-glow-b" aria-hidden="true"></div>
+          <div class="hero-copy">
+            <p class="eyebrow">Google Maps Transparency Observer</p>
+            <h1>Was Google über entfernte Bewertungen sichtbar macht.</h1>
+            <p class="hero-lede">
+              Eine neutrale Übersicht öffentlich sichtbarer Google-Maps-Hinweise zu Bewertungen,
+              die nach Beschwerden wegen Diffamierung entfernt wurden.
+            </p>
+            <div class="hero-meta">
+              <span class="status-dot" aria-hidden="true"></span>
+              <span id="last-updated">Noch kein Datensatz veröffentlicht</span>
+            </div>
+          </div>
+
+          <div class="hero-note">
+            <span class="hero-note-label">Wichtig</span>
+            <p>
+              Ein Hinweis ist <strong>kein Beweis für Fehlverhalten</strong> eines Unternehmens.
+              Er zeigt ausschließlich, welche Information Google Maps öffentlich eingeblendet hat.
+            </p>
+          </div>
+        </section>
+
+        <section class="stats" aria-label="Zusammenfassung">
+          <article class="stat-card">
+            <span class="stat-label">Betriebe beobachtet</span>
+            <strong class="stat-value" id="stat-observed">—</strong>
+            <span class="stat-foot">deduplizierte Einträge</span>
+          </article>
+          <article class="stat-card emphasis">
+            <span class="stat-label">Hinweise gefunden</span>
+            <strong class="stat-value" id="stat-notices">—</strong>
+            <span class="stat-foot" id="stat-notice-share">öffentliche Google-Hinweise</span>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Sichtbare Reviews</span>
+            <strong class="stat-value" id="stat-reviews">—</strong>
+            <span class="stat-foot">über alle beobachteten Betriebe</span>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Größter beobachteter Bereich</span>
+            <strong class="stat-value stat-value-small" id="stat-largest">—</strong>
+            <span class="stat-foot">kein exakter Löschwert</span>
+          </article>
+        </section>
+
+        <section class="explainer">
+          <div>
+            <span class="section-kicker">Wie lesen?</span>
+            <h2>Transparenzsignal, nicht Schuldurteil.</h2>
+          </div>
+          <p>
+            Google veröffentlicht bei manchen Unternehmensprofilen ungefähre Bereiche, etwa
+            <strong>21–50</strong>. Wir übernehmen diesen öffentlich sichtbaren Bereich. Fehlt ein
+            Hinweis, bedeutet das nur <strong>„in diesem Crawl nicht beobachtet“</strong> und nicht
+            „sicher null entfernte Bewertungen“.
+          </p>
+        </section>
+
+        <section class="results-section" aria-labelledby="results-title">
+          <div class="results-heading">
+            <div>
+              <span class="section-kicker">Datensatz</span>
+              <h2 id="results-title">Betriebe in Osnabrück</h2>
+            </div>
+            <span class="results-count" id="results-count">0 Ergebnisse</span>
+          </div>
+
+          <div class="toolbar">
+            <label class="search-box">
+              <span class="search-icon" aria-hidden="true">⌕</span>
+              <span class="sr-only">Betriebe durchsuchen</span>
+              <input id="search-input" type="search" placeholder="Restaurant oder Kategorie suchen…" autocomplete="off" />
+            </label>
+
+            <div class="filter-row" role="group" aria-label="Ergebnisse filtern">
+              <button class="filter-chip is-active" type="button" data-filter="all">Alle</button>
+              <button class="filter-chip" type="button" data-filter="notice">Mit Hinweis</button>
+              <button class="filter-chip" type="button" data-filter="50">50+</button>
+              <button class="filter-chip" type="button" data-filter="100">100+</button>
+              <button class="filter-chip" type="button" data-filter="uncertain">Unvollständig</button>
+            </div>
+
+            <label class="sort-select">
+              <span>Sortieren</span>
+              <select id="sort-select">
+                <option value="notice-desc">Größter Hinweis</option>
+                <option value="reviews-desc">Meiste Reviews</option>
+                <option value="rating-desc">Beste Bewertung</option>
+                <option value="name-asc">Name A–Z</option>
+              </select>
+            </label>
+          </div>
+
+          <div id="data-message" class="data-message" hidden></div>
+          <div id="venue-grid" class="venue-grid" aria-live="polite"></div>
+
+          <div id="empty-state" class="empty-state" hidden>
+            <div class="empty-icon" aria-hidden="true">◎</div>
+            <h3>Noch keine öffentlichen Daten</h3>
+            <p>
+              Nach einem Crawl kann der Datensatz mit <code>npm run export-web-data</code> erzeugt
+              und anschließend zusammen mit <code>docs/data/osnabruck.json</code> veröffentlicht werden.
+            </p>
+          </div>
+        </section>
+
+        <section class="methodology" id="methodik">
+          <div class="methodology-head">
+            <span class="section-kicker">Methodik</span>
+            <h2>So entsteht der Datensatz.</h2>
+          </div>
+          <div class="method-grid">
+            <article>
+              <span class="method-number">01</span>
+              <h3>Öffentliche Google-Maps-Seite</h3>
+              <p>Der Crawler öffnet Unternehmensprofile und deren Review-Bereich wie ein normaler Browser.</p>
+            </article>
+            <article>
+              <span class="method-number">02</span>
+              <h3>Hinweis beobachten</h3>
+              <p>Gesucht wird ausschließlich Googles öffentlich sichtbarer Transparenzhinweis und dessen Bereich.</p>
+            </article>
+            <article>
+              <span class="method-number">03</span>
+              <h3>Neutral veröffentlichen</h3>
+              <p>Wir zeigen den beobachteten Bereich, Zeitpunkt und Quelle, ohne Motive oder Berechtigung zu behaupten.</p>
+            </article>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <div>
+          <strong>Review Transparency</strong>
+          <p>Unabhängige Aufbereitung öffentlich sichtbarer Google-Maps-Informationen.</p>
+        </div>
+        <p>
+          Google Maps ist eine Marke von Google. Dieses Projekt ist nicht mit Google verbunden oder von Google unterstützt.
+        </p>
+      </footer>
+    </div>
+
+    <dialog id="venue-dialog" class="venue-dialog">
+      <div class="dialog-shell">
+        <button class="dialog-close" id="dialog-close" type="button" aria-label="Details schließen">×</button>
+        <div id="dialog-content"></div>
+      </div>
+    </dialog>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
