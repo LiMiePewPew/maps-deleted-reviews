@@ -6,6 +6,10 @@ import { loadConfigs } from './config.js';
 import { mergeCsvFiles, writePositiveCsvFile } from './csvSort.js';
 import { resetBatchVenueCache, runScraper } from './mapsScraper.js';
 import { formatRunSummary, writeRunSummary } from './summary.js';
+import type { ScraperConfig } from './types.js';
+
+const BETWEEN_BATCH_RUNS_DELAY_MS = 500;
+const BROWSER_RECOVERY_DELAY_MS = 1_500;
 
 async function main(): Promise<void> {
   const cli = parseCliArgs(process.argv.slice(2));
@@ -35,7 +39,7 @@ async function main(): Promise<void> {
     console.log(`State: ${config.statePath}`);
 
     try {
-      const summary = await runScraper(config);
+      const summary = await runScraperWithBrowserRecovery(config, cli.fullGastroScan);
       await writeRunSummary(summary);
       console.log(formatRunSummary(summary));
       candidateOutputPaths.add(config.outputCsvPath);
@@ -48,6 +52,10 @@ async function main(): Promise<void> {
       if (await fileExists(config.outputCsvPath)) {
         candidateOutputPaths.add(config.outputCsvPath);
       }
+    }
+
+    if (cli.fullGastroScan) {
+      await sleep(BETWEEN_BATCH_RUNS_DELAY_MS);
     }
   }
 
@@ -90,6 +98,34 @@ async function main(): Promise<void> {
   }
 
   console.log('Done.');
+}
+
+async function runScraperWithBrowserRecovery(
+  config: ScraperConfig,
+  enableRecovery: boolean,
+): ReturnType<typeof runScraper> {
+  try {
+    return await runScraper(config);
+  } catch (error) {
+    if (!enableRecovery || !isBrowserClosedError(error)) {
+      throw error;
+    }
+
+    console.warn(
+      `Browser closed unexpectedly during "${config.searchTerm}"; waiting ${BROWSER_RECOVERY_DELAY_MS}ms and retrying this search term once.`,
+    );
+    await sleep(BROWSER_RECOVERY_DELAY_MS);
+    return runScraper(config);
+  }
+}
+
+function isBrowserClosedError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /Target page, context or browser has been closed|Browser page closed/i.test(message);
+}
+
+async function sleep(milliseconds: number): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 }
 
 async function ensureConfigExists(configPath: string): Promise<void> {
