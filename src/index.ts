@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { access, copyFile } from 'node:fs/promises';
+import { access, copyFile, rm } from 'node:fs/promises';
 import { parseCliArgs } from './cli.js';
 import { loadConfigs } from './config.js';
 import { mergeCsvFiles, writePositiveCsvFile } from './csvSort.js';
@@ -54,7 +54,12 @@ async function main(): Promise<void> {
 
   for (const config of configs) {
     if (importedVenues) {
-      await seedScraperState(config, importedVenues);
+      const freshRefresh = await seedScraperState(config, importedVenues);
+      if (freshRefresh) {
+        await rm(config.outputCsvPath, { force: true });
+        await rm(config.outputCsvPath.replace(/\.csv$/i, '-positive.csv'), { force: true });
+        console.log('Previous imported run was complete; starting a fresh notice refresh.');
+      }
       console.log(`Checking ${importedVenues.length} imported Google Maps venues.`);
     } else {
       console.log(
