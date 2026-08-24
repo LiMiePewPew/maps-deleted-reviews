@@ -9,6 +9,8 @@ let installed = false;
 let startupLogged = false;
 
 const CLOAK_STARTUP_TIMEOUT_MS = 45_000;
+const HEADED_WINDOW_WIDTH = 1440;
+const HEADED_WINDOW_HEIGHT = 1100;
 
 type PlaywrightPersistentOptions = NonNullable<
   Parameters<typeof chromium.launchPersistentContext>[1]
@@ -55,6 +57,9 @@ export function installCloakBrowserRuntime(): void {
       headless,
       locale: options.locale,
       viewport: headless ? (options.viewport ?? undefined) : null,
+      // Keep headed mode in the same wide layout used by the certified
+      // Playwright baseline while still using a real, non-emulated viewport.
+      args: headless ? [] : [`--window-size=${HEADED_WINDOW_WIDTH},${HEADED_WINDOW_HEIGHT}`],
       humanize: false,
     };
 
