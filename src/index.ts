@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { copyFile, access } from 'node:fs/promises';
+import { access, copyFile } from 'node:fs/promises';
 import { parseCliArgs } from './cli.js';
 import { loadConfigs } from './config.js';
-import { mergeCsvFiles } from './csvSort.js';
+import { mergeCsvFiles, writePositiveCsvFile } from './csvSort.js';
 import { runScraper } from './mapsScraper.js';
 import { formatRunSummary, writeRunSummary } from './summary.js';
 
@@ -11,7 +11,19 @@ async function main(): Promise<void> {
   const cli = parseCliArgs(process.argv.slice(2));
   const configPath = cli.configPath;
   await ensureConfigExists(configPath);
+
+  if (cli.fullGastroScan && cli.overrides.navigationTimeoutMs === undefined) {
+    cli.overrides.navigationTimeoutMs = 90_000;
+  }
+
   const configs = await loadConfigs(configPath, cli.overrides);
+  const cities = [...new Set(configs.map((config) => config.city))];
+  if (cli.fullGastroScan && cities.length !== 1) {
+    throw new Error('--full-gastro-scan currently supports exactly one city per invocation.');
+  }
+
+  const failures: Array<{ searchTerm: string; message: string }> = [];
+  const candidateOutputPaths = new Set<string>();
 
   for (const config of configs) {
     console.log(
@@ -20,18 +32,59 @@ async function main(): Promise<void> {
     console.log(`Output: ${config.outputCsvPath}`);
     console.log(`State: ${config.statePath}`);
 
-    const summary = await runScraper(config);
-    await writeRunSummary(summary);
-    console.log(formatRunSummary(summary));
+    try {
+      const summary = await runScraper(config);
+      await writeRunSummary(summary);
+      console.log(formatRunSummary(summary));
+      candidateOutputPaths.add(config.outputCsvPath);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push({ searchTerm: config.searchTerm, message });
+      console.error(`Scan failed for "${config.searchTerm}": ${message}`);
+      console.error('Continuing with the remaining search terms.');
+
+      if (await fileExists(config.outputCsvPath)) {
+        candidateOutputPaths.add(config.outputCsvPath);
+      }
+    }
   }
 
-  const mergeCsvPath = configs.find((config) => config.mergeCsvPath)?.mergeCsvPath;
+  const configuredMergePath = configs.find((config) => config.mergeCsvPath)?.mergeCsvPath;
+  const mergeCsvPath =
+    configuredMergePath ??
+    (cli.fullGastroScan && cities[0]
+      ? `output/deleted-reviews-${slugify(cities[0])}-gastro-all.csv`
+      : undefined);
+
   if (mergeCsvPath) {
-    await mergeCsvFiles(
-      mergeCsvPath,
-      configs.map((config) => config.outputCsvPath),
-    );
-    console.log(`Merged CSV: ${mergeCsvPath}`);
+    const inputPaths = (
+      await Promise.all(
+        [...candidateOutputPaths].map(async (path) => ((await fileExists(path)) ? path : null)),
+      )
+    ).filter((path): path is string => path !== null && path !== mergeCsvPath);
+
+    if (inputPaths.length > 0) {
+      const uniqueVenues = await mergeCsvFiles(mergeCsvPath, inputPaths);
+      console.log(`Merged CSV: ${mergeCsvPath}`);
+      console.log(`Unique venues: ${uniqueVenues}`);
+
+      if (cli.fullGastroScan) {
+        const positivePath = mergeCsvPath.replace(/\.csv$/i, '-positive.csv');
+        const positiveVenues = await writePositiveCsvFile(mergeCsvPath, positivePath);
+        console.log(`Removal-notice CSV: ${positivePath}`);
+        console.log(`Venues with notices: ${positiveVenues}`);
+      }
+    } else {
+      console.warn('No CSV outputs were available to merge.');
+    }
+  }
+
+  if (failures.length > 0) {
+    console.warn(`Completed with ${failures.length} failed search term(s):`);
+    for (const failure of failures) {
+      console.warn(`- ${failure.searchTerm}: ${failure.message}`);
+    }
+    process.exitCode = 1;
   }
 
   console.log('Done.');
@@ -54,6 +107,24 @@ async function ensureConfigExists(configPath: string): Promise<void> {
 
     throw error;
   }
+}
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function slugify(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 main().catch((error: unknown) => {
