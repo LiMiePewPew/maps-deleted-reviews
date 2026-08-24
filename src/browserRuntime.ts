@@ -2,116 +2,62 @@ import {
   binaryInfo,
   launchPersistentContext as launchCloakPersistentContext,
 } from 'cloakbrowser';
-import { chromium, type BrowserContext } from 'playwright';
-
-let installed = false;
-let startupLogged = false;
-let cloakLaunchDepth = 0;
+import type { BrowserContext } from 'playwright';
 
 const CLOAK_STARTUP_TIMEOUT_MS = 45_000;
 const HEADED_WINDOW_WIDTH = 1440;
 const HEADED_WINDOW_HEIGHT = 1100;
 const MIN_CONTEXT_PAGES = 2;
 
-const playwrightLaunchPersistentContext = chromium.launchPersistentContext.bind(chromium);
-
-type PlaywrightPersistentOptions = NonNullable<
-  Parameters<typeof chromium.launchPersistentContext>[1]
->;
-
-/**
- * Installs CloakBrowser behind the Playwright BrowserType object used by the
- * existing crawler. The crawler keeps its mature Playwright page/locator API,
- * while Chromium itself is launched through CloakBrowser's official persistent
- * context API.
- *
- * CloakBrowser's official persistent launcher delegates back into Playwright's
- * chromium.launchPersistentContext() internally. Because the crawler patches
- * that same method, an unguarded wrapper recursively calls itself forever. We
- * therefore capture Playwright's original persistent launcher before patching
- * and route nested launch calls directly to that original implementation.
- *
- * We keep humanize disabled because the crawler already drives normal Playwright
- * actions and a previous high-level humanize launch path caused excessive Node
- * heap growth. We also avoid a separate ensureBinary() preflight because the
- * official launcher resolves the cached binary itself.
- *
- * Two initial pages are kept so Pipeline V3 can close discovery worker pages
- * without ever removing the last browser window before notice checking starts.
- *
- * We do not add proxy rotation, CAPTCHA solving, or challenge bypass logic.
- */
-export function installCloakBrowserRuntime(): void {
-  if (installed) {
-    return;
-  }
-
-  const cloakLaunch = async (
-    userDataDir: string,
-    options: PlaywrightPersistentOptions = {},
-  ): Promise<BrowserContext> => {
-    // CloakBrowser itself eventually calls Playwright's persistent launcher.
-    // If that nested call reaches this patched method, bypass Cloak and invoke
-    // the original Playwright implementation to break the recursion.
-    if (cloakLaunchDepth > 0) {
-      return playwrightLaunchPersistentContext(userDataDir, options);
-    }
-
-    cloakLaunchDepth += 1;
-    try {
-      const info = binaryInfo();
-
-      if (!process.env.CLOAKBROWSER_BINARY_PATH && info.installed && info.binaryPath) {
-        process.env.CLOAKBROWSER_BINARY_PATH = info.binaryPath;
-      }
-
-      const headless = options.headless ?? false;
-      if (!startupLogged) {
-        console.log(
-          `CloakBrowser: launching ${headless ? 'headless' : 'headed'} (${info.version ?? 'unknown version'}, ${info.tier ?? 'unknown tier'}, official persistent context)...`,
-        );
-      }
-
-      const context = await withTimeout(
-        launchCloakPersistentContext({
-          userDataDir,
-          headless,
-          locale: options.locale,
-          viewport: options.viewport ?? { width: HEADED_WINDOW_WIDTH, height: HEADED_WINDOW_HEIGHT },
-          args: headless ? [] : [`--window-size=${HEADED_WINDOW_WIDTH},${HEADED_WINDOW_HEIGHT}`],
-          humanize: false,
-        }),
-        CLOAK_STARTUP_TIMEOUT_MS,
-        'CloakBrowser persistent context launch timed out',
-      );
-
-      const browserContext = context as unknown as BrowserContext;
-      await ensureSpareKeepalivePage(browserContext);
-
-      if (!startupLogged) {
-        console.log('CloakBrowser: persistent profile enabled');
-        console.log('CloakBrowser: started');
-        startupLogged = true;
-      }
-
-      return browserContext;
-    } finally {
-      cloakLaunchDepth -= 1;
-    }
-  };
-
-  Object.defineProperty(chromium, 'launchPersistentContext', {
-    configurable: true,
-    enumerable: false,
-    writable: true,
-    value: cloakLaunch,
-  });
-
-  installed = true;
+export interface ExperimentalCloakOptions {
+  headless: boolean;
+  locale?: string;
+  viewport?: { width: number; height: number };
 }
 
-export function crawlerBrowserName(): string {
-  return 'CloakBrowser';
+/**
+ * Experimental CloakBrowser backend.
+ *
+ * This function is intentionally explicit. It does not patch Playwright's
+ * chromium.launchPersistentContext() and therefore cannot recursively intercept
+ * CloakBrowser's own internal Playwright launch calls.
+ *
+ * Production/default crawler paths currently use Playwright Chromium directly,
+ * matching the known-working upstream architecture. CloakBrowser can be tested
+ * separately through this helper without changing global browser behavior.
+ */
+export async function launchExperimentalCloakPersistentContext(
+  userDataDir: string,
+  options: ExperimentalCloakOptions,
+): Promise<BrowserContext> {
+  const info = binaryInfo();
+
+  if (!process.env.CLOAKBROWSER_BINARY_PATH && info.installed && info.binaryPath) {
+    process.env.CLOAKBROWSER_BINARY_PATH = info.binaryPath;
+  }
+
+  console.log(
+    `CloakBrowser: launching ${options.headless ? 'headless' : 'headed'} (${info.version ?? 'unknown version'}, ${info.tier ?? 'unknown tier'}, explicit experimental backend)...`,
+  );
+
+  const context = await withTimeout(
+    launchCloakPersistentContext({
+      userDataDir,
+      headless: options.headless,
+      locale: options.locale,
+      viewport: options.viewport ?? { width: HEADED_WINDOW_WIDTH, height: HEADED_WINDOW_HEIGHT },
+      args: options.headless ? [] : [`--window-size=${HEADED_WINDOW_WIDTH},${HEADED_WINDOW_HEIGHT}`],
+      humanize: false,
+    }),
+    CLOAK_STARTUP_TIMEOUT_MS,
+    'CloakBrowser persistent context launch timed out',
+  );
+
+  const browserContext = context as unknown as BrowserContext;
+  await ensureSpareKeepalivePage(browserContext);
+
+  console.log('CloakBrowser: experimental context started');
+  return browserContext;
 }
 
 async function ensureSpareKeepalivePage(context: BrowserContext): Promise<void> {
