@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { access, copyFile } from 'node:fs/promises';
+import { browserDisplayName, installBrowserBackend } from './browserRuntime.js';
 import { parseCliArgs } from './cli.js';
 import { loadConfigs } from './config.js';
 import { mergeCsvFiles, writePositiveCsvFile } from './csvSort.js';
@@ -15,6 +16,9 @@ async function main(): Promise<void> {
   const cli = parseCliArgs(process.argv.slice(2));
   const configPath = cli.configPath;
   await ensureConfigExists(configPath);
+
+  await installBrowserBackend(cli.browser);
+  console.log(`Browser: ${browserDisplayName(cli.browser)}`);
 
   if (cli.fullGastroScan && cli.overrides.navigationTimeoutMs === undefined) {
     cli.overrides.navigationTimeoutMs = 60_000;
