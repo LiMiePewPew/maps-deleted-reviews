@@ -27,12 +27,14 @@ export interface CliArgs {
   configPath: string;
   overrides: RawScraperConfig;
   fullGastroScan: boolean;
+  workers: number;
 }
 
 export function parseCliArgs(args: string[]): CliArgs {
   const overrides: RawScraperConfig = {};
   let configPath = 'config.json';
   let fullGastroScan = false;
+  let workers = 1;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -71,6 +73,14 @@ export function parseCliArgs(args: string[]): CliArgs {
     if (arg === '--full-gastro-scan' || arg === '--large-list') {
       fullGastroScan = true;
       overrides.searchTerms = [...FULL_GASTRO_SEARCH_TERMS];
+      continue;
+    }
+    if (arg === '--workers') {
+      workers = Number(requireValue(arg, next));
+      if (!Number.isInteger(workers) || workers < 1 || workers > 8) {
+        throw new Error('--workers must be an integer between 1 and 8');
+      }
+      index += 1;
       continue;
     }
     if (arg === '--depth') {
@@ -138,7 +148,7 @@ export function parseCliArgs(args: string[]): CliArgs {
     }
   }
 
-  return { configPath, overrides, fullGastroScan };
+  return { configPath, overrides, fullGastroScan, workers };
 }
 
 function parseCommaSeparated(value: string): string[] {
