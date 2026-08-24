@@ -23,9 +23,34 @@ describe('progress formatting', () => {
     expect(formatVenuesDetected(17)).toBe('Venues detected: 17');
   });
 
-  it('formats venue rows as aligned terminal output', () => {
+  it('formats positive venue rows as aligned terminal output', () => {
     expect(formatVenueProgress(row)).toContain('Venue Rüyam Gemüse Kebab 2');
     expect(formatVenueProgress(row)).toContain('⎸ 11 to 20 deletions');
     expect(formatVenueProgress(row)).toContain('⎸ 42291 total reviews');
+  });
+
+  it('does not present a missing notice as proven zero deletions', () => {
+    expect(
+      formatVenueProgress({
+        ...row,
+        deletedReviewsMin: 0,
+        deletedReviewsMax: 0,
+        deletedReviewsEstimate: 0,
+        deletedReviewNotice: null,
+      }),
+    ).toContain('⎸ no notice observed');
+  });
+
+  it('labels incomplete checks explicitly', () => {
+    expect(
+      formatVenueProgress({
+        ...row,
+        deletedReviewsMin: 0,
+        deletedReviewsMax: 0,
+        deletedReviewsEstimate: 0,
+        deletedReviewNotice: null,
+        status: 'partial',
+      }),
+    ).toContain('⎸ notice check incomplete');
   });
 });
