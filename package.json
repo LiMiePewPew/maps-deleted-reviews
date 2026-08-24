@@ -1,7 +1,7 @@
 {
   "name": "maps-deleted-reviews",
   "version": "0.3.0",
-  "description": "Config-driven Google Maps scraper for deleted-review notices using CloakBrowser.",
+  "description": "Config-driven Google Maps scraper for deleted-review notices using Playwright, with an experimental CloakBrowser backend.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
