@@ -57,7 +57,8 @@ Pipeline V3 adds:
 - O(1) indexed row updates during notice checking;
 - targeted venue/review text extraction;
 - immediate completion when positive removal evidence appears;
-- a conservative 1.8 second settle window before a negative notice is accepted;
+- strict negative evidence requiring a real review sort control plus hydrated review-card content;
+- a conservative 4 second stable-review-panel window before a negative notice is accepted;
 - images, media and fonts blocked;
 - reduced-motion browser rendering;
 - state checkpoints every 5 processed venues instead of every successful venue;
@@ -67,7 +68,9 @@ Pipeline V3 adds:
 
 The current removal-notice settle loop runs on the Node side with short DOM snapshots every 200 ms. A previous long-running browser-side MutationObserver implementation was removed after it failed to settle reliably under the CloakBrowser runtime.
 
-The hot path never marks a venue `ok` unless rating, review count and the reviews panel were successfully observed.
+A generic `Sortieren`, `Relevanteste`, or review count elsewhere on the venue page is not enough to certify a negative result. If Google visibly renders a defamation-removal notice that the parser cannot understand, the venue remains `partial` rather than degrading to a false negative.
+
+The hot path never marks a venue `ok` unless rating, review count and strict reviews-panel evidence were successfully observed.
 
 ## Current Certification Status
 
@@ -94,7 +97,9 @@ HasAntep ÇiğKöfte Osnabrück     2-5
 
 During the CloakBrowser migration, four discovery workers completed the 20-term depth-1 Osnabrück discovery in about 12 seconds in one observed run, producing 19 unique venues from 20 raw slots. Venue ratings and visible review counts were available for all 19.
 
-Removal-notice parity is still being re-certified after replacing the failed browser-side settle observer with Node-side polling. Do not consider V3 fully certified until a clean live run returns `Partial: 0`, `Failed: 0`, and the positive controls are reproduced subject to legitimate changes in Google's live notices.
+A later run exposed a false-negative certification bug: all 19 venues returned `ok` while all known positive controls disappeared. Pipeline state version 2 invalidates those earlier results, and the negative-certification path now requires hydrated review-panel evidence instead of generic page text.
+
+Removal-notice parity is still being re-certified. Do not consider V3 fully certified until a clean live run returns `Partial: 0`, `Failed: 0`, and the positive controls are reproduced subject to legitimate changes in Google's live notices.
 
 ## Commands
 
@@ -166,6 +171,8 @@ This makes worker-count decisions benchmarkable rather than speculative.
 V3 persists a city-specific JSON state file. Completed discovery terms are reused on an unfinished rerun.
 
 A venue is only added to `completedVenueKeys` after an `ok` detail result. Partial and failed rows remain retryable.
+
+The state schema is versioned. Changes that alter certification semantics can increment the state version so older `ok` rows are not reused as trusted evidence.
 
 Once a run finishes with no partial or failed rows, it is marked complete. Invoking the same scan again starts a fresh snapshot.
 
