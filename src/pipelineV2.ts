@@ -57,6 +57,7 @@ export interface PipelineSummary {
 export async function runCityPipeline(
   configs: ScraperConfig[],
   workers = 1,
+  importedVenues?: Venue[],
 ): Promise<PipelineSummary> {
   if (configs.length === 0) {
     throw new Error('Pipeline requires at least one scraper config.');
@@ -73,15 +74,28 @@ export async function runCityPipeline(
     throw new Error('Pipeline V2 supports one city/country pair per invocation.');
   }
 
+  const importedMode = importedVenues !== undefined;
+  if (importedMode && importedVenues.length === 0) {
+    throw new Error('Imported pipeline requires at least one venue.');
+  }
+
   const startedAtMs = Date.now();
   const slug = slugify(city);
-  const outputPath = first.mergeCsvPath ?? `output/deleted-reviews-${slug}-gastro-all.csv`;
+  const outputSuffix = importedMode ? 'places' : 'gastro-all';
+  const outputPath = first.mergeCsvPath ?? `output/deleted-reviews-${slug}-${outputSuffix}.csv`;
   const positivePath = outputPath.replace(/\.csv$/i, '-positive.csv');
-  const statePath = `output/state-${slug}-gastro-v2.json`;
+  const statePath = importedMode
+    ? `output/state-${slug}-places-v2.json`
+    : `output/state-${slug}-gastro-v2.json`;
   let state = await loadPipelineState(statePath, city, country);
 
   if (state.finishedAt) {
     state = createPipelineState(city, country);
+    await savePipelineState(statePath, state);
+  }
+
+  if (importedMode) {
+    synchronizeImportedVenues(state, importedVenues);
     await savePipelineState(statePath, state);
   }
 
@@ -97,27 +111,32 @@ export async function runCityPipeline(
     const discoveryPage = context.pages()[0] ?? (await context.newPage());
     configurePage(discoveryPage, first.navigationTimeoutMs);
 
-    console.log('\n=== PHASE 1: DISCOVERY ===');
-    for (const config of configs) {
-      if (state.completedSearchTerms.includes(config.searchTerm)) {
-        console.log(`Discovery cached: ${config.searchTerm}`);
-        continue;
-      }
-
-      try {
-        const venues = await discoverSearchTerm(discoveryPage, config);
-        for (const venue of venues) {
-          mergeDiscoveredVenue(state, venue, config.searchTerm);
+    if (importedMode) {
+      console.log('\n=== PHASE 1: IMPORTED DISCOVERY ===');
+      console.log(`Imported venues: ${state.venues.length} unique`);
+    } else {
+      console.log('\n=== PHASE 1: DISCOVERY ===');
+      for (const config of configs) {
+        if (state.completedSearchTerms.includes(config.searchTerm)) {
+          console.log(`Discovery cached: ${config.searchTerm}`);
+          continue;
         }
-        state.completedSearchTerms.push(config.searchTerm);
-        await savePipelineState(statePath, state);
-        console.log(
-          `Discovery ${config.searchTerm}: ${venues.length} raw, ${state.venues.length} unique total`,
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn(`Discovery failed for ${config.searchTerm}: ${message}`);
-        console.warn('Continuing with the next search term; this term remains resumable.');
+
+        try {
+          const venues = await discoverSearchTerm(discoveryPage, config);
+          for (const venue of venues) {
+            mergeDiscoveredVenue(state, venue, config.searchTerm);
+          }
+          state.completedSearchTerms.push(config.searchTerm);
+          await savePipelineState(statePath, state);
+          console.log(
+            `Discovery ${config.searchTerm}: ${venues.length} raw, ${state.venues.length} unique total`,
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.warn(`Discovery failed for ${config.searchTerm}: ${message}`);
+          console.warn('Continuing with the next search term; this term remains resumable.');
+        }
       }
     }
 
@@ -195,7 +214,7 @@ export async function runCityPipeline(
   return {
     city,
     country,
-    searchTerms: configs.length,
+    searchTerms: importedMode ? 0 : configs.length,
     discoveredVenues: state.venues.length,
     checkedVenues: state.rows.length,
     noticeVenues,
@@ -324,7 +343,7 @@ async function scrapeVenueCertified(
       return {
         name: venue.name,
         url: venue.url,
-        address: await extractAddress(page),
+        address: (await extractAddress(page)) ?? venue.address,
         venueType: venue.searchTerms.join('|'),
         totalReviews,
         deletedReviewsMin: deleted?.min ?? 0,
@@ -385,13 +404,10 @@ async function waitForCertifiedReviewsText(
 
     const combined = combineSnapshots(snapshots);
 
-    // Positive evidence is authoritative as soon as it appears.
     if (panelVisible && parseDeletedReviews(combined) !== null) {
       return combined;
     }
 
-    // Absence needs a settle period. This prevents overview review counts from
-    // making an incompletely hydrated reviews panel look like a certified zero.
     if (
       panelVisible &&
       Date.now() - startedAt >= NEGATIVE_NOTICE_SETTLE_MS &&
@@ -604,6 +620,27 @@ export function mergeDiscoveredVenue(
   state.venues.push({ ...venue, searchTerms: [searchTerm] });
 }
 
+export function synchronizeImportedVenues(
+  state: Pick<PipelineState, 'venues' | 'completedVenueKeys' | 'rows' | 'completedSearchTerms'>,
+  venues: Venue[],
+): void {
+  const allowedKeys = new Set(venues.map((venue) => venueIdentityKey(venue)));
+  const nextVenues: PipelineVenue[] = [];
+  const seen = new Set<string>();
+
+  for (const venue of venues) {
+    const key = venueIdentityKey(venue);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    nextVenues.push({ ...venue, searchTerms: ['external'] });
+  }
+
+  state.venues = nextVenues;
+  state.completedVenueKeys = state.completedVenueKeys.filter((key) => allowedKeys.has(key));
+  state.rows = state.rows.filter((row) => allowedKeys.has(venueIdentityKey(row)));
+  state.completedSearchTerms = ['external'];
+}
+
 function upsertRow(rows: ScrapedVenue[], row: ScrapedVenue): void {
   const key = venueIdentityKey(row);
   const index = rows.findIndex((candidate) => venueIdentityKey(candidate) === key);
@@ -621,6 +658,7 @@ function partialRow(venue: PipelineVenue, text: string, error: string): ScrapedV
   return {
     name: venue.name,
     url: venue.url,
+    address: venue.address,
     venueType: venue.searchTerms.join('|'),
     totalReviews,
     deletedReviewsMin: 0,
@@ -640,6 +678,7 @@ function failedRow(venue: PipelineVenue, error: string): ScrapedVenue {
   return {
     name: venue.name,
     url: venue.url,
+    address: venue.address,
     venueType: venue.searchTerms.join('|'),
     totalReviews: null,
     deletedReviewsMin: 0,
