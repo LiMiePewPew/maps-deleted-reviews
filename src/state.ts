@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { ScraperState, Venue } from './types.js';
+import { venueIdentityKey } from './venueIdentity.js';
 
 export function createInitialState(runKey = ''): ScraperState {
   return {
@@ -42,9 +43,8 @@ export async function saveState(statePath: string, state: ScraperState): Promise
 }
 
 export function upsertDiscoveredVenue(state: ScraperState, venue: Venue): void {
-  const exists = state.discoveredVenues.some(
-    (candidate) => candidate.url === venue.url || normalizeVenueKey(candidate) === normalizeVenueKey(venue),
-  );
+  const key = venueIdentityKey(venue);
+  const exists = state.discoveredVenues.some((candidate) => venueIdentityKey(candidate) === key);
   if (!exists) {
     state.discoveredVenues.push(venue);
   }
@@ -79,8 +79,4 @@ function normalizeState(raw: Partial<ScraperState>, runKey = ''): ScraperState {
     cursor: raw.cursor ?? 0,
     updatedAt: raw.updatedAt ?? new Date().toISOString(),
   };
-}
-
-function normalizeVenueKey(venue: Venue): string {
-  return `${venue.name} ${venue.address ?? ''}`.toLowerCase().replace(/\s+/g, ' ').trim();
 }
