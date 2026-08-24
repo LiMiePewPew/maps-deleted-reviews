@@ -28,6 +28,8 @@ export interface CliArgs {
   overrides: RawScraperConfig;
   fullGastroScan: boolean;
   workers: number;
+  discoveryWorkers: number;
+  turbo: boolean;
 }
 
 export function parseCliArgs(args: string[]): CliArgs {
@@ -35,6 +37,10 @@ export function parseCliArgs(args: string[]): CliArgs {
   let configPath = 'config.json';
   let fullGastroScan = false;
   let workers = 1;
+  let discoveryWorkers = 1;
+  let workersExplicit = false;
+  let discoveryWorkersExplicit = false;
+  let turbo = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -75,11 +81,19 @@ export function parseCliArgs(args: string[]): CliArgs {
       overrides.searchTerms = [...FULL_GASTRO_SEARCH_TERMS];
       continue;
     }
+    if (arg === '--turbo') {
+      turbo = true;
+      continue;
+    }
     if (arg === '--workers') {
-      workers = Number(requireValue(arg, next));
-      if (!Number.isInteger(workers) || workers < 1 || workers > 8) {
-        throw new Error('--workers must be an integer between 1 and 8');
-      }
+      workers = parseWorkerCount(arg, requireValue(arg, next));
+      workersExplicit = true;
+      index += 1;
+      continue;
+    }
+    if (arg === '--discovery-workers') {
+      discoveryWorkers = parseWorkerCount(arg, requireValue(arg, next));
+      discoveryWorkersExplicit = true;
       index += 1;
       continue;
     }
@@ -148,7 +162,16 @@ export function parseCliArgs(args: string[]): CliArgs {
     }
   }
 
-  return { configPath, overrides, fullGastroScan, workers };
+  if (turbo) {
+    if (!workersExplicit) {
+      workers = 3;
+    }
+    if (!discoveryWorkersExplicit) {
+      discoveryWorkers = 4;
+    }
+  }
+
+  return { configPath, overrides, fullGastroScan, workers, discoveryWorkers, turbo };
 }
 
 function parseCommaSeparated(value: string): string[] {
@@ -156,6 +179,14 @@ function parseCommaSeparated(value: string): string[] {
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function parseWorkerCount(flag: string, value: string): number {
+  const workers = Number(value);
+  if (!Number.isInteger(workers) || workers < 1 || workers > 8) {
+    throw new Error(`${flag} must be an integer between 1 and 8`);
+  }
+  return workers;
 }
 
 function requireValue(flag: string, value: string | undefined): string {
