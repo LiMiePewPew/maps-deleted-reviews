@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { mergeDiscoveredVenue, shouldBlockResourceType } from '../src/pipelineV2.js';
+import {
+  mergeDiscoveredVenue,
+  shouldBlockResourceType,
+  synchronizeImportedVenues,
+} from '../src/pipelineV2.js';
+import type { ScrapedVenue } from '../src/types.js';
 
 describe('pipeline V2 discovery deduplication', () => {
   it('merges the same Maps place found by multiple search terms', () => {
@@ -44,6 +49,33 @@ describe('pipeline V2 discovery deduplication', () => {
   });
 });
 
+describe('pipeline V2 imported discovery', () => {
+  it('deduplicates the imported queue and preserves only matching resume data', () => {
+    const alphaUrl = 'https://www.google.de/maps/place/Alpha/@52.1,8.1';
+    const staleUrl = 'https://www.google.de/maps/place/Stale/@52.2,8.2';
+    const alphaRow = row('Alpha', alphaUrl);
+    const staleRow = row('Stale', staleUrl);
+    const state = {
+      venues: [],
+      completedVenueKeys: ['url:/maps/place/alpha/@52.1,8.1', 'url:/maps/place/stale/@52.2,8.2'],
+      rows: [alphaRow, staleRow],
+      completedSearchTerms: ['restaurant'],
+    };
+
+    synchronizeImportedVenues(state, [
+      { name: 'Alpha', url: `${alphaUrl}?entry=ttu`, address: 'Alpha St' },
+      { name: 'Alpha duplicate', url: `${alphaUrl}?hl=de`, address: 'Alpha St' },
+      { name: 'Beta', url: 'https://www.google.de/maps/place/Beta/@52.3,8.3', address: 'Beta St' },
+    ]);
+
+    expect(state.venues).toHaveLength(2);
+    expect(state.venues.map((venue) => venue.name)).toEqual(['Alpha', 'Beta']);
+    expect(state.completedVenueKeys).toEqual(['url:/maps/place/alpha/@52.1,8.1']);
+    expect(state.rows).toEqual([alphaRow]);
+    expect(state.completedSearchTerms).toEqual(['external']);
+  });
+});
+
 describe('pipeline V2 resource blocking', () => {
   it('blocks heavy visual assets but keeps documents and scripts', () => {
     expect(shouldBlockResourceType('image')).toBe(true);
@@ -54,3 +86,21 @@ describe('pipeline V2 resource blocking', () => {
     expect(shouldBlockResourceType('xhr')).toBe(false);
   });
 });
+
+function row(name: string, url: string): ScrapedVenue {
+  return {
+    name,
+    url,
+    venueType: 'external',
+    totalReviews: 10,
+    deletedReviewsMin: 0,
+    deletedReviewsMax: 0,
+    deletedReviewsEstimate: 0,
+    currentStarRating: 4.5,
+    percentageDeleted: 0,
+    realScoreIfDeletedAreOneStar: 4.5,
+    deletedReviewNotice: null,
+    scrapedAt: '2026-08-24T00:00:00.000Z',
+    status: 'ok',
+  };
+}
