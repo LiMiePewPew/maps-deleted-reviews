@@ -13,7 +13,7 @@ import {
   upsertDiscoveredVenue,
 } from './state.js';
 import { formatRunSummary, writeRunSummary } from './summary.js';
-import type { ScraperConfig, ScraperState, Venue } from './types.js';
+import type { RawScraperConfig, ScraperConfig, ScraperState, Venue } from './types.js';
 
 interface HybridArgs {
   configPath: string;
@@ -30,13 +30,19 @@ async function main(): Promise<void> {
   const args = parseHybridArgs(process.argv.slice(2));
   await ensureConfigExists(args.configPath);
 
-  const configs = await loadConfigs(args.configPath, {
-    city: args.city,
-    country: args.country,
+  const overrides: RawScraperConfig = {
     searchTerm: 'hybrid',
     depth: 1,
     headed: args.headed,
-  });
+  };
+  if (args.city) {
+    overrides.city = args.city;
+  }
+  if (args.country) {
+    overrides.country = args.country;
+  }
+
+  const configs = await loadConfigs(args.configPath, overrides);
   if (configs.length !== 1) {
     throw new Error('Hybrid scan requires exactly one city. Pass --city explicitly.');
   }
