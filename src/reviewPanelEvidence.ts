@@ -7,6 +7,29 @@ export interface ReviewPanelEvidence {
   selectedReviewTabVisible: boolean;
 }
 
+/**
+ * Weak evidence used only to decide whether a click successfully opened the
+ * venue's reviews UI. This must stay separate from negative certification:
+ * review cards can hydrate after the tab itself is already selected.
+ */
+export function isReviewPanelOpenEvidence(
+  evidence: Pick<
+    ReviewPanelEvidence,
+    'positiveNoticeVisible' | 'sortControlVisible' | 'selectedReviewTabVisible'
+  >,
+): boolean {
+  return (
+    evidence.positiveNoticeVisible ||
+    evidence.sortControlVisible ||
+    evidence.selectedReviewTabVisible
+  );
+}
+
+/**
+ * Strong evidence required before a missing removal notice may be certified as
+ * a negative observation. A selected tab or generic sort text alone is not
+ * enough; at least one hydrated review card must also be visible.
+ */
 export function isNegativeReviewPanelReady(
   evidence: Pick<
     ReviewPanelEvidence,
