@@ -14,7 +14,7 @@ export async function loadVenuesFromFile(path: string): Promise<Venue[]> {
   return parsePlacesText(raw, extname(path).toLowerCase());
 }
 
-export async function seedScraperState(config: ScraperConfig, venues: Venue[]): Promise<void> {
+export async function seedScraperState(config: ScraperConfig, venues: Venue[]): Promise<boolean> {
   const runKey = [config.city, config.country, config.searchTerm]
     .map((part) => part.trim().toLowerCase())
     .join('::');
@@ -41,6 +41,7 @@ export async function seedScraperState(config: ScraperConfig, venues: Venue[]): 
   }
 
   await saveState(config.statePath, state);
+  return fullyCompleted;
 }
 
 export function parsePlacesText(raw: string, extension = '.csv'): Venue[] {
