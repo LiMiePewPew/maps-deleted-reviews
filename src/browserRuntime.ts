@@ -18,14 +18,15 @@ type PlaywrightPersistentOptions = NonNullable<
  * existing crawler. The crawler keeps its mature Playwright page/locator API,
  * while Chromium itself is launched by CloakBrowser.
  *
- * CloakBrowser resolves/downloads its own binary inside launchContext(). We do
- * not call ensureBinary() separately because that duplicates license/download
- * resolution and can stall after a first-time Pro download on some platforms.
- *
  * We intentionally use CloakBrowser's normal context path instead of reusing
  * the historical Playwright persistent profile. The old profile is not needed
  * for Google Maps discovery and can make a browser migration fail because of
  * stale Chromium profile locks or incompatible profile state.
+ *
+ * Humanize is deliberately disabled here. CloakBrowser's patched Chromium is
+ * still used, but we avoid the extra JavaScript method-wrapping layer while
+ * validating stability on macOS. The crawler already has explicit waits and
+ * conservative throttling of its own.
  *
  * We do not add proxy rotation, CAPTCHA solving, or challenge bypass logic.
  */
@@ -38,11 +39,20 @@ export function installCloakBrowserRuntime(): void {
     _userDataDir: string,
     options: PlaywrightPersistentOptions = {},
   ): Promise<BrowserContext> => {
+    const info = binaryInfo();
+
+    // If CloakBrowser has already downloaded a binary, point subsequent launches
+    // directly at it. This avoids repeating license/update/download resolution
+    // after a crash during the first launch attempt.
+    if (!process.env.CLOAKBROWSER_BINARY_PATH && info.installed && info.binaryPath) {
+      process.env.CLOAKBROWSER_BINARY_PATH = info.binaryPath;
+    }
+
     if (!startupLogged) {
-      const info = binaryInfo();
+      const version = info.version ?? 'unknown version';
+      const tier = info.tier ?? 'unknown tier';
       console.log(
-        `CloakBrowser: launching ${options.headless ? 'headless' : 'headed'} context ` +
-          `(${info.installed ? `cached ${info.version ?? 'binary'}` : 'binary will be prepared by CloakBrowser'})...`,
+        `CloakBrowser: launching ${options.headless ? 'headless' : 'headed'} context (${version}, ${tier}, humanize off)...`,
       );
     }
 
@@ -51,17 +61,15 @@ export function installCloakBrowserRuntime(): void {
         headless: options.headless ?? false,
         locale: options.locale,
         viewport: options.headless ? (options.viewport ?? undefined) : null,
-        humanize: true,
+        humanize: false,
       }),
       CLOAK_STARTUP_TIMEOUT_MS,
       'CloakBrowser context launch timed out',
     );
 
     if (!startupLogged) {
-      const info = binaryInfo();
       console.log(
-        `CloakBrowser: started (${info.version ?? 'unknown version'}, ${info.tier ?? 'unknown tier'}, ` +
-          `${context.pages().length} initial page${context.pages().length === 1 ? '' : 's'})`,
+        `CloakBrowser: started (${context.pages().length} initial page${context.pages().length === 1 ? '' : 's'})`,
       );
       startupLogged = true;
     }
