@@ -68,17 +68,39 @@ export async function getReviewPanelEvidence(page: Page): Promise<ReviewPanelEvi
           bodyText,
         );
 
+      const sortPattern =
+        /Sortieren|Sort reviews|Sort by|Neueste|Relevanteste|Newest|Most relevant/i;
+
       const controls = Array.from(
         document.querySelectorAll('button, [role="button"], [aria-label]'),
       ).filter(isVisible);
-      const sortControlVisible = controls.some((element) =>
-        /Sortieren|Sort reviews|Sort by|Neueste|Relevanteste|Newest|Most relevant/i.test(
-          labelOf(element),
-        ),
+      const semanticSortControlVisible = controls.some((element) =>
+        sortPattern.test(labelOf(element)),
       );
 
+      // The known-good upstream checker intentionally treats these as visible
+      // text markers rather than requiring a specific semantic control. Google
+      // Maps sometimes renders the sort labels in nested spans/divs while the
+      // actual clickable ancestor has no useful role or aria-label.
+      const visibleSortTextMarker = Array.from(
+        document.querySelectorAll('button, [role="button"], div, span'),
+      )
+        .filter(isVisible)
+        .some((element) => {
+          const text = (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+          return (
+            text.length > 0 &&
+            text.length <= 80 &&
+            /^(?:Sortieren|Neueste|Relevanteste|Sort reviews|Sort by|Newest|Most relevant)(?:\s.*)?$/i.test(
+              text,
+            )
+          );
+        });
+
+      const sortControlVisible = semanticSortControlVisible || visibleSortTextMarker;
+
       const selectedReviewTabVisible = Array.from(
-        document.querySelectorAll('[role="tab"][aria-selected="true"]'),
+        document.querySelectorAll('[role="tab"][aria-selected="true"], [aria-selected="true"]'),
       )
         .filter(isVisible)
         .some((element) => /Rezension|Bewertung|Reviews?/i.test(labelOf(element)));
