@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { access, copyFile } from 'node:fs/promises';
+import { crawlerBrowserName, installCloakBrowserRuntime } from './browserRuntime.js';
 import { parseCliArgs } from './cli.js';
 import { loadConfigs } from './config.js';
 import { mergeCsvFiles } from './csvSort.js';
@@ -8,10 +9,14 @@ import { resetBatchVenueCache, runScraper } from './mapsScraper.js';
 import { runCityPipelineV3 } from './pipelineV3.js';
 import { formatRunSummary, writeRunSummary } from './summary.js';
 
+installCloakBrowserRuntime();
+
 async function main(): Promise<void> {
   const cli = parseCliArgs(process.argv.slice(2));
   const configPath = cli.configPath;
   await ensureConfigExists(configPath);
+
+  console.log(`Browser: ${crawlerBrowserName()}`);
 
   if (cli.fullGastroScan && cli.overrides.navigationTimeoutMs === undefined) {
     cli.overrides.navigationTimeoutMs = 60_000;
