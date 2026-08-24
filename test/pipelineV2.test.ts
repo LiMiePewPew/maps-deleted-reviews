@@ -53,11 +53,13 @@ describe('pipeline V2 imported discovery', () => {
   it('deduplicates the imported queue and preserves only matching resume data', () => {
     const alphaUrl = 'https://www.google.de/maps/place/Alpha/@52.1,8.1';
     const staleUrl = 'https://www.google.de/maps/place/Stale/@52.2,8.2';
+    const alphaKey = 'url:maps:/maps/place/alpha/@52.1,8.1';
+    const staleKey = 'url:maps:/maps/place/stale/@52.2,8.2';
     const alphaRow = row('Alpha', alphaUrl);
     const staleRow = row('Stale', staleUrl);
     const state = {
       venues: [],
-      completedVenueKeys: ['url:/maps/place/alpha/@52.1,8.1', 'url:/maps/place/stale/@52.2,8.2'],
+      completedVenueKeys: [alphaKey, staleKey],
       rows: [alphaRow, staleRow],
       completedSearchTerms: ['restaurant'],
     };
@@ -70,7 +72,7 @@ describe('pipeline V2 imported discovery', () => {
 
     expect(state.venues).toHaveLength(2);
     expect(state.venues.map((venue) => venue.name)).toEqual(['Alpha', 'Beta']);
-    expect(state.completedVenueKeys).toEqual(['url:/maps/place/alpha/@52.1,8.1']);
+    expect(state.completedVenueKeys).toEqual([alphaKey]);
     expect(state.rows).toEqual([alphaRow]);
     expect(state.completedSearchTerms).toEqual(['external']);
   });
