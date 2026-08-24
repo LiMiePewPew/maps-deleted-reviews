@@ -1,8 +1,9 @@
 import {
   binaryInfo,
-  launchContext as launchCloakContext,
+  buildContextOptions,
+  buildLaunchOptions,
 } from 'cloakbrowser';
-import { chromium, type BrowserContext } from 'playwright';
+import { chromium, type Browser, type BrowserContext } from 'playwright';
 
 let installed = false;
 let startupLogged = false;
@@ -16,17 +17,13 @@ type PlaywrightPersistentOptions = NonNullable<
 /**
  * Installs CloakBrowser behind the Playwright BrowserType object used by the
  * existing crawler. The crawler keeps its mature Playwright page/locator API,
- * while Chromium itself is launched by CloakBrowser.
+ * while Chromium itself is CloakBrowser's patched stealth binary.
  *
- * We intentionally use CloakBrowser's normal context path instead of reusing
- * the historical Playwright persistent profile. The old profile is not needed
- * for Google Maps discovery and can make a browser migration fail because of
- * stale Chromium profile locks or incompatible profile state.
- *
- * Humanize is deliberately disabled here. CloakBrowser's patched Chromium is
- * still used, but we avoid the extra JavaScript method-wrapping layer while
- * validating stability on macOS. The crawler already has explicit waits and
- * conservative throttling of its own.
+ * We intentionally use CloakBrowser's official buildLaunchOptions() and
+ * buildContextOptions() integration surface, then let our existing Playwright
+ * instance perform the launch. This avoids CloakBrowser's higher-level
+ * launchContext()/humanize/license-guard wrapping, which caused a Node heap OOM
+ * on macOS during startup, while preserving the patched binary and stealth args.
  *
  * We do not add proxy rotation, CAPTCHA solving, or challenge bypass logic.
  */
@@ -41,40 +38,64 @@ export function installCloakBrowserRuntime(): void {
   ): Promise<BrowserContext> => {
     const info = binaryInfo();
 
-    // If CloakBrowser has already downloaded a binary, point subsequent launches
-    // directly at it. This avoids repeating license/update/download resolution
-    // after a crash during the first launch attempt.
+    // Reuse an already downloaded binary directly. This prevents another
+    // license/update/download resolution after an interrupted first launch.
     if (!process.env.CLOAKBROWSER_BINARY_PATH && info.installed && info.binaryPath) {
       process.env.CLOAKBROWSER_BINARY_PATH = info.binaryPath;
     }
 
+    const headless = options.headless ?? false;
     if (!startupLogged) {
-      const version = info.version ?? 'unknown version';
-      const tier = info.tier ?? 'unknown tier';
       console.log(
-        `CloakBrowser: launching ${options.headless ? 'headless' : 'headed'} context (${version}, ${tier}, humanize off)...`,
+        `CloakBrowser: launching ${headless ? 'headless' : 'headed'} (${info.version ?? 'unknown version'}, ${info.tier ?? 'unknown tier'}, direct Playwright integration)...`,
       );
     }
 
-    const context = await withTimeout(
-      launchCloakContext({
-        headless: options.headless ?? false,
-        locale: options.locale,
-        viewport: options.headless ? (options.viewport ?? undefined) : null,
-        humanize: false,
-      }),
+    const cloakOptions = {
+      headless,
+      locale: options.locale,
+      viewport: headless ? (options.viewport ?? undefined) : null,
+      humanize: false,
+    };
+
+    const launchOptions = await withTimeout(
+      buildLaunchOptions(cloakOptions),
       CLOAK_STARTUP_TIMEOUT_MS,
-      'CloakBrowser context launch timed out',
+      'CloakBrowser launch-option preparation timed out',
     );
 
-    if (!startupLogged) {
-      console.log(
-        `CloakBrowser: started (${context.pages().length} initial page${context.pages().length === 1 ? '' : 's'})`,
+    const browser = await withTimeout(
+      chromium.launch(launchOptions as Parameters<typeof chromium.launch>[0]),
+      CLOAK_STARTUP_TIMEOUT_MS,
+      'CloakBrowser Chromium launch timed out',
+    );
+
+    let context: BrowserContext;
+    try {
+      context = await withTimeout(
+        browser.newContext(
+          buildContextOptions(cloakOptions) as Parameters<Browser['newContext']>[0],
+        ),
+        CLOAK_STARTUP_TIMEOUT_MS,
+        'CloakBrowser context creation timed out',
       );
+    } catch (error) {
+      await browser.close().catch(() => undefined);
+      throw error;
+    }
+
+    const originalClose = context.close.bind(context);
+    context.close = async () => {
+      await originalClose().catch(() => undefined);
+      await browser.close().catch(() => undefined);
+    };
+
+    if (!startupLogged) {
+      console.log('CloakBrowser: started');
       startupLogged = true;
     }
 
-    return context as unknown as BrowserContext;
+    return context;
   };
 
   Object.defineProperty(chromium, 'launchPersistentContext', {
