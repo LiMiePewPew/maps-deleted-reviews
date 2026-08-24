@@ -140,6 +140,12 @@ function shouldPreferCsvRow(
   candidateHeaders: string[],
   candidateCells: string[],
 ): boolean {
+  const existingHasNotice = hasDeletionNotice(existingHeaders, existingCells);
+  const candidateHasNotice = hasDeletionNotice(candidateHeaders, candidateCells);
+  if (candidateHasNotice !== existingHasNotice) {
+    return candidateHasNotice;
+  }
+
   const existingStatus = getCell(existingHeaders, existingCells, 'status');
   const candidateStatus = getCell(candidateHeaders, candidateCells, 'status');
   const existingRank = statusRank(existingStatus);
@@ -155,6 +161,12 @@ function shouldPreferCsvRow(
   }
 
   return false;
+}
+
+function hasDeletionNotice(headers: string[], cells: string[]): boolean {
+  const notice = getCell(headers, cells, 'review_notice').trim();
+  const deletedMax = parseNullableNumber(getCell(headers, cells, 'deleted_reviews_max')) ?? 0;
+  return notice.length > 0 || deletedMax > 0;
 }
 
 function getCell(headers: string[], cells: string[], header: string): string {
