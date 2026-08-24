@@ -9,14 +9,18 @@ import {
   parseReviewCount,
   parseStarRating,
 } from './parsers.js';
+import {
+  getReviewPanelEvidence,
+  isNegativeReviewPanelReady,
+} from './reviewPanelEvidence.js';
 import type { ScrapedVenue, ScraperConfig, Venue } from './types.js';
 import { venueIdentityKey } from './venueIdentity.js';
 
-const PIPELINE_STATE_VERSION = 1;
+const PIPELINE_STATE_VERSION = 2;
 const NAVIGATION_ATTEMPTS = 2;
 const VENUE_READY_TIMEOUT_MS = 12_000;
-const REVIEWS_READY_TIMEOUT_MS = 8_000;
-const NEGATIVE_NOTICE_SETTLE_MS = 1_800;
+const REVIEWS_READY_TIMEOUT_MS = 12_000;
+const NEGATIVE_NOTICE_SETTLE_MS = 4_000;
 const VENUE_POLL_MS = 180;
 const REVIEWS_POLL_MS = 200;
 const STATE_CHECKPOINT_EVERY = 5;
@@ -523,9 +527,13 @@ async function waitForCertifiedReviewsText(page: Page, timeoutMs: number): Promi
       return combined;
     }
 
-    const panelVisible = await hasReviewsPanel(page);
-    const reviewCountReady = parseReviewCount(combined) !== null;
-    if (panelVisible && reviewCountReady) {
+    const evidence = await getReviewPanelEvidence(page);
+    if (evidence.positiveNoticeVisible) {
+      // A visible Google notice that our parser does not understand must never
+      // degrade into a negative result. Keep waiting so the venue becomes partial
+      // on timeout instead of producing a false negative.
+      panelReadySince = null;
+    } else if (isNegativeReviewPanelReady(evidence)) {
       panelReadySince ??= Date.now();
       if (Date.now() - panelReadySince >= NEGATIVE_NOTICE_SETTLE_MS) {
         return combined;
@@ -565,14 +573,14 @@ async function openReviewsPanel(page: Page): Promise<boolean> {
 
         await candidate.scrollIntoViewIfNeeded().catch(() => undefined);
         await candidate.click({ timeout: 1_500 }).catch(() => undefined);
-        if (await waitForReviewsPanelMarker(page, 2_500)) {
+        if (await waitForReviewsPanelMarker(page, 5_000)) {
           return true;
         }
       }
     }
 
     const clickedViaDom = await clickVisibleReviewsControlViaDom(page);
-    if (clickedViaDom && (await waitForReviewsPanelMarker(page, 2_500))) {
+    if (clickedViaDom && (await waitForReviewsPanelMarker(page, 5_000))) {
       return true;
     }
 
@@ -628,21 +636,8 @@ async function waitForReviewsPanelMarker(page: Page, timeoutMs: number): Promise
 }
 
 async function hasReviewsPanel(page: Page): Promise<boolean> {
-  const text = await page
-    .evaluate(() => {
-      const body = document.body?.innerText ?? '';
-      const labels = Array.from(document.querySelectorAll('[aria-label]'))
-        .map((element) => element.getAttribute('aria-label') ?? '')
-        .filter((label) =>
-          /Diffamierung|Sortieren|Neueste|Relevanteste|Newest|Most relevant|Sort reviews/i.test(label),
-        );
-      return [body, ...labels].join(' ');
-    })
-    .catch(() => '');
-
-  return /Beschwerden\s+wegen\s+Diffamierung\s+entfernt|Sortieren|Neueste|Relevanteste|Newest|Most relevant|Sort reviews/i.test(
-    normalizeWhitespace(text),
-  );
+  const evidence = await getReviewPanelEvidence(page);
+  return evidence.positiveNoticeVisible || isNegativeReviewPanelReady(evidence);
 }
 
 async function getRelevantExtractionText(page: Page): Promise<string> {
