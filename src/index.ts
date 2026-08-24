@@ -4,7 +4,7 @@ import { access, copyFile } from 'node:fs/promises';
 import { parseCliArgs } from './cli.js';
 import { loadConfigs } from './config.js';
 import { mergeCsvFiles, writePositiveCsvFile } from './csvSort.js';
-import { runScraper } from './mapsScraper.js';
+import { resetBatchVenueCache, runScraper } from './mapsScraper.js';
 import { formatRunSummary, writeRunSummary } from './summary.js';
 
 async function main(): Promise<void> {
@@ -13,7 +13,7 @@ async function main(): Promise<void> {
   await ensureConfigExists(configPath);
 
   if (cli.fullGastroScan && cli.overrides.navigationTimeoutMs === undefined) {
-    cli.overrides.navigationTimeoutMs = 90_000;
+    cli.overrides.navigationTimeoutMs = 60_000;
   }
 
   const configs = await loadConfigs(configPath, cli.overrides);
@@ -21,6 +21,8 @@ async function main(): Promise<void> {
   if (cli.fullGastroScan && cities.length !== 1) {
     throw new Error('--full-gastro-scan currently supports exactly one city per invocation.');
   }
+
+  resetBatchVenueCache();
 
   const failures: Array<{ searchTerm: string; message: string }> = [];
   const candidateOutputPaths = new Set<string>();
