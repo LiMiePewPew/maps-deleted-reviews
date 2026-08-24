@@ -6,14 +6,29 @@ import { loadConfigs } from './config.js';
 import { mergeCsvFiles } from './csvSort.js';
 import { resetBatchVenueCache, runScraper } from './mapsScraper.js';
 import { runCityPipeline } from './pipelineV2.js';
+import { loadVenuesFromFile } from './placesInput.js';
 import { formatRunSummary, writeRunSummary } from './summary.js';
+import type { Venue } from './types.js';
 
 async function main(): Promise<void> {
   const cli = parseCliArgs(process.argv.slice(2));
   const configPath = cli.configPath;
   await ensureConfigExists(configPath);
 
-  if (cli.fullGastroScan && cli.overrides.navigationTimeoutMs === undefined) {
+  let importedVenues: Venue[] | undefined;
+  if (cli.placesFile) {
+    importedVenues = await loadVenuesFromFile(cli.placesFile);
+    if (importedVenues.length === 0) throw new Error(`No usable venues found in ${cli.placesFile}.`);
+
+    const requestedDepth = cli.overrides.depth;
+    if (requestedDepth !== undefined) importedVenues = importedVenues.slice(0, requestedDepth);
+
+    cli.overrides.searchTerm = 'places';
+    cli.overrides.searchTerms = undefined;
+    cli.overrides.depth = importedVenues.length;
+  }
+
+  if ((cli.fullGastroScan || importedVenues) && cli.overrides.navigationTimeoutMs === undefined) {
     cli.overrides.navigationTimeoutMs = 60_000;
   }
 
@@ -22,13 +37,21 @@ async function main(): Promise<void> {
   if (cli.fullGastroScan && cities.length !== 1) {
     throw new Error('--full-gastro-scan currently supports exactly one city per invocation.');
   }
+  if (importedVenues && configs.length !== 1) {
+    throw new Error('--places-file requires exactly one city/config per invocation.');
+  }
 
-  if (cli.fullGastroScan) {
-    const summary = await runCityPipeline(configs, cli.workers);
+  if (cli.fullGastroScan || importedVenues) {
+    const summary = await runCityPipeline(configs, cli.workers, importedVenues);
     console.log('\n=== PIPELINE V2 SUMMARY ===');
     console.log(`City: ${summary.city}, ${summary.country}`);
-    console.log(`Search terms: ${summary.searchTerms}`);
-    console.log(`Unique venues: ${summary.discoveredVenues}`);
+    if (importedVenues) {
+      console.log(`Discovery source: ${cli.placesFile}`);
+      console.log(`Imported venues: ${summary.discoveredVenues}`);
+    } else {
+      console.log(`Search terms: ${summary.searchTerms}`);
+      console.log(`Unique venues: ${summary.discoveredVenues}`);
+    }
     console.log(`Checked venues: ${summary.checkedVenues}`);
     console.log(`Removal notices: ${summary.noticeVenues}`);
     console.log(`Partial: ${summary.partialVenues}`);
@@ -44,14 +67,11 @@ async function main(): Promise<void> {
   }
 
   resetBatchVenueCache();
-
   const failures: Array<{ searchTerm: string; message: string }> = [];
   const candidateOutputPaths = new Set<string>();
 
   for (const config of configs) {
-    console.log(
-      `Scraping ${config.depth} "${config.searchTerm}" venues in ${config.city}, ${config.country}.`,
-    );
+    console.log(`Scraping ${config.depth} "${config.searchTerm}" venues in ${config.city}, ${config.country}.`);
     console.log(`Output: ${config.outputCsvPath}`);
     console.log(`State: ${config.statePath}`);
 
@@ -65,19 +85,14 @@ async function main(): Promise<void> {
       failures.push({ searchTerm: config.searchTerm, message });
       console.error(`Scan failed for "${config.searchTerm}": ${message}`);
       console.error('Continuing with the remaining search terms.');
-
-      if (await fileExists(config.outputCsvPath)) {
-        candidateOutputPaths.add(config.outputCsvPath);
-      }
+      if (await fileExists(config.outputCsvPath)) candidateOutputPaths.add(config.outputCsvPath);
     }
   }
 
   const configuredMergePath = configs.find((config) => config.mergeCsvPath)?.mergeCsvPath;
   if (configuredMergePath) {
     const inputPaths = (
-      await Promise.all(
-        [...candidateOutputPaths].map(async (path) => ((await fileExists(path)) ? path : null)),
-      )
+      await Promise.all([...candidateOutputPaths].map(async (path) => ((await fileExists(path)) ? path : null)))
     ).filter((path): path is string => path !== null && path !== configuredMergePath);
 
     if (inputPaths.length > 0) {
@@ -89,9 +104,7 @@ async function main(): Promise<void> {
 
   if (failures.length > 0) {
     console.warn(`Completed with ${failures.length} failed search term(s):`);
-    for (const failure of failures) {
-      console.warn(`- ${failure.searchTerm}: ${failure.message}`);
-    }
+    for (const failure of failures) console.warn(`- ${failure.searchTerm}: ${failure.message}`);
     process.exitCode = 1;
   }
 
@@ -102,28 +115,17 @@ async function ensureConfigExists(configPath: string): Promise<void> {
   try {
     await access(configPath);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-      throw error;
-    }
-
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     if (configPath === 'config.json') {
       await copyFile('config.example.json', configPath);
-      throw new Error(
-        'Created config.json from config.example.json. Review it, then run the command again.',
-      );
+      throw new Error('Created config.json from config.example.json. Review it, then run the command again.');
     }
-
     throw error;
   }
 }
 
 async function fileExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
+  try { await access(path); return true; } catch { return false; }
 }
 
 main().catch((error: unknown) => {
