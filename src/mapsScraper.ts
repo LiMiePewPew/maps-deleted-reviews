@@ -20,14 +20,21 @@ import {
   upsertDiscoveredVenue,
 } from './state.js';
 import type { RunSummary, ScrapedVenue, ScraperConfig, ScraperState, Venue } from './types.js';
+import { venueIdentityKey } from './venueIdentity.js';
 
 type BlockerKind = 'rate-limit' | 'sign-in';
 
 const RATE_LIMIT_USER_WAIT_MS = 60_000;
+const NAVIGATION_ATTEMPTS = 2;
+const batchVenueCache = new Map<string, ScrapedVenue>();
 
 interface Blocker {
   kind: BlockerKind;
   message: string;
+}
+
+export function resetBatchVenueCache(): void {
+  batchVenueCache.clear();
 }
 
 export async function runScraper(config: ScraperConfig): Promise<RunSummary> {
@@ -42,6 +49,10 @@ export async function runScraper(config: ScraperConfig): Promise<RunSummary> {
     state = createInitialState(runKey);
     rows = [];
     await saveState(config.statePath, state);
+  }
+
+  for (const row of rows) {
+    cacheSuccessfulVenue(row);
   }
 
   const context = await chromium.launchPersistentContext(config.browserProfileDir, {
@@ -59,7 +70,7 @@ export async function runScraper(config: ScraperConfig): Promise<RunSummary> {
     await scrapeVenues(page, config, state, rows);
     await refetchSuspectRows(page, config, state, rows);
   } finally {
-    await context.close();
+    await context.close().catch(() => undefined);
   }
 
   return createRunSummary(config, state, rows, startedAt);
@@ -113,9 +124,18 @@ async function discoverVenues(
     `${config.searchTerm} ${config.city} ${config.country}`,
   )}`;
 
-  await page.goto(searchUrl, { waitUntil: 'domcontentloaded' });
+  await navigateWithRetry(page, searchUrl, config, `search for ${config.searchTerm}`);
   await maybeAcceptConsent(page);
   await handleBlocker(page, config, state);
+
+  const directVenue = await extractDirectVenue(page);
+  if (directVenue) {
+    upsertDiscoveredVenue(state, directVenue);
+    await saveState(config.statePath, state);
+    console.log(formatVenuesDetected(state.discoveredVenues.length));
+    return;
+  }
+
   await waitForFirstSearchResult(page);
 
   let unchangedScrolls = 0;
@@ -154,18 +174,27 @@ async function scrapeVenues(
   state: ScraperState,
   rows: ScrapedVenue[],
 ): Promise<void> {
-  const alreadyOutput = new Set(rows.map((row) => row.url));
-
   for (let index = state.cursor; index < state.discoveredVenues.length; index += 1) {
     const venue = state.discoveredVenues[index];
     if (!venue || state.completedUrls.includes(venue.url)) {
       continue;
     }
 
+    const cached = batchVenueCache.get(venueIdentityKey(venue));
+    if (cached?.status === 'ok') {
+      const reused = reuseCachedVenue(cached, venue, config.searchTerm);
+      upsertScrapedRow(rows, reused);
+      markVenueCompleted(state, venue.url);
+      await saveState(config.statePath, state);
+      await writeCsv(config.outputCsvPath, rows, config.sortCsv);
+      console.log(`${formatVenueProgress(reused)} ⎸ cached`);
+      continue;
+    }
+
     try {
       const scraped = await scrapeVenueWithRateLimitRetry(page, config, state, venue);
       upsertScrapedRow(rows, scraped);
-      alreadyOutput.add(scraped.url);
+      cacheSuccessfulVenue(scraped);
       console.log(formatVenueProgress(scraped));
 
       if (scraped.status === 'failed') {
@@ -181,7 +210,6 @@ async function scrapeVenues(
 
       const message = error instanceof Error ? error.message : String(error);
       upsertScrapedRow(rows, toFailedRow(venue, message, config.searchTerm));
-      alreadyOutput.add(venue.url);
       await writeCsv(config.outputCsvPath, rows, config.sortCsv);
 
       if (config.resumeMode === 'stop') {
@@ -210,10 +238,20 @@ async function refetchSuspectRows(
 
   for (const row of suspectRows) {
     const venue = state.discoveredVenues.find((candidate) => candidate.url === row.url) ?? row;
+    const cached = batchVenueCache.get(venueIdentityKey(venue));
+    if (cached?.status === 'ok') {
+      const reused = reuseCachedVenue(cached, venue, config.searchTerm);
+      upsertScrapedRow(rows, reused);
+      markVenueCompleted(state, venue.url);
+      await saveState(config.statePath, state);
+      await writeCsv(config.outputCsvPath, rows, config.sortCsv);
+      continue;
+    }
 
     try {
       const scraped = await scrapeVenueWithRateLimitRetry(page, config, state, venue);
       upsertScrapedRow(rows, scraped);
+      cacheSuccessfulVenue(scraped);
       console.log(formatVenueProgress(scraped));
       if (scraped.status === 'failed') {
         markVenueFailed(state, venue.url);
@@ -250,7 +288,7 @@ async function scrapeVenueWithRateLimitRetry(
   venue: Venue,
 ): Promise<ScrapedVenue> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    await page.goto(venue.url, { waitUntil: 'domcontentloaded' });
+    await navigateWithRetry(page, venue.url, config, venue.name);
     await maybeAcceptConsent(page);
     const blocker = await detectBlocker(page);
     if (blocker?.kind === 'rate-limit') {
@@ -299,7 +337,8 @@ export function shouldStartFreshRun(
 }
 
 export function upsertScrapedRow(rows: ScrapedVenue[], row: ScrapedVenue): void {
-  const index = rows.findIndex((candidate) => candidate.url === row.url);
+  const key = venueIdentityKey(row);
+  const index = rows.findIndex((candidate) => venueIdentityKey(candidate) === key);
   if (index === -1) {
     rows.push(row);
     return;
@@ -405,7 +444,7 @@ async function waitForResultListChange(
       { timeout: timeoutMs },
     )
     .catch(async () => {
-      await page.waitForTimeout(minimumDelayMs);
+      await page.waitForTimeout(minimumDelayMs).catch(() => undefined);
     });
 }
 
@@ -466,6 +505,24 @@ async function extractVisibleSearchResults(page: Page): Promise<Venue[]> {
   }
 
   return venues;
+}
+
+async function extractDirectVenue(page: Page): Promise<Venue | null> {
+  if (!page.url().includes('/maps/place/')) {
+    return null;
+  }
+
+  const heading = page.locator('h1').first();
+  await heading.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => undefined);
+  const name = normalizeWhitespace(await heading.innerText().catch(() => ''));
+  if (!name) {
+    return null;
+  }
+
+  return {
+    name,
+    url: page.url(),
+  };
 }
 
 async function extractVenueName(anchor: Locator): Promise<string | null> {
@@ -545,6 +602,40 @@ async function maybeAcceptConsent(page: Page): Promise<void> {
       return;
     }
   }
+}
+
+async function navigateWithRetry(
+  page: Page,
+  url: string,
+  config: ScraperConfig,
+  label: string,
+): Promise<void> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= NAVIGATION_ATTEMPTS; attempt += 1) {
+    await randomDelay(config);
+    try {
+      await page.goto(url, {
+        waitUntil: 'domcontentloaded',
+        timeout: config.navigationTimeoutMs,
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (page.isClosed()) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`Browser page closed while navigating to ${label}: ${message}`);
+      }
+
+      if (attempt < NAVIGATION_ATTEMPTS) {
+        console.warn(`Navigation retry ${attempt}/${NAVIGATION_ATTEMPTS - 1} for ${label}.`);
+        await page.waitForTimeout(1_000 * attempt).catch(() => undefined);
+      }
+    }
+  }
+
+  const message = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(`Navigation failed for ${label} after ${NAVIGATION_ATTEMPTS} attempts: ${message}`);
 }
 
 async function handleBlocker(
@@ -640,6 +731,22 @@ async function randomDelay(config: ScraperConfig): Promise<void> {
   const spread = config.actionDelay.maxMs - config.actionDelay.minMs;
   const delay = config.actionDelay.minMs + Math.floor(Math.random() * (spread + 1));
   await new Promise((resolve) => setTimeout(resolve, delay));
+}
+
+function cacheSuccessfulVenue(row: ScrapedVenue): void {
+  if (row.status !== 'ok') {
+    return;
+  }
+  batchVenueCache.set(venueIdentityKey(row), row);
+}
+
+function reuseCachedVenue(cached: ScrapedVenue, venue: Venue, venueType: string): ScrapedVenue {
+  return {
+    ...cached,
+    ...venue,
+    address: venue.address ?? cached.address,
+    venueType,
+  };
 }
 
 async function loadExistingRows(outputCsvPath: string): Promise<ScrapedVenue[]> {
