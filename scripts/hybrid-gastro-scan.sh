@@ -11,6 +11,9 @@ fi
 GOSOM_BIN="${GOSOM_BIN:-google-maps-scraper}"
 GOSOM_CONCURRENCY="${GOSOM_CONCURRENCY:-4}"
 GOSOM_DEPTH="${GOSOM_DEPTH:-2}"
+GOSOM_GRID_BBOX="${GOSOM_GRID_BBOX:-}"
+GOSOM_GRID_CELL="${GOSOM_GRID_CELL:-1.0}"
+GOSOM_ZOOM="${GOSOM_ZOOM:-16}"
 NOTICE_HEADLESS="${NOTICE_HEADLESS:-0}"
 
 mkdir -p output
@@ -39,13 +42,25 @@ done
 echo "== Stage 1: gosom discovery =="
 echo "Queries: $QUERY_FILE"
 echo "Output:  $DISCOVERY_FILE"
-"$GOSOM_BIN" \
-  -input "$QUERY_FILE" \
-  -results "$DISCOVERY_FILE" \
-  -depth "$GOSOM_DEPTH" \
-  -c "$GOSOM_CONCURRENCY" \
-  -lang de \
+
+gosom_args=(
+  -input "$QUERY_FILE"
+  -results "$DISCOVERY_FILE"
+  -depth "$GOSOM_DEPTH"
+  -c "$GOSOM_CONCURRENCY"
+  -lang de
   -exit-on-inactivity 3m
+)
+if [[ -n "$GOSOM_GRID_BBOX" ]]; then
+  echo "Grid bbox: $GOSOM_GRID_BBOX (${GOSOM_GRID_CELL} km cells, zoom $GOSOM_ZOOM)"
+  gosom_args+=(
+    -grid-bbox "$GOSOM_GRID_BBOX"
+    -grid-cell "$GOSOM_GRID_CELL"
+    -zoom "$GOSOM_ZOOM"
+  )
+fi
+
+"$GOSOM_BIN" "${gosom_args[@]}"
 
 echo
 echo "== Stage 2: deletion-notice verification =="
