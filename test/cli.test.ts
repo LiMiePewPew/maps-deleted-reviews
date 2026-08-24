@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FULL_GASTRO_SEARCH_TERMS, parseCliArgs } from '../src/cli.js';
+import { fullGastroDepthFor } from '../src/fullGastro.js';
 
 describe('parseCliArgs', () => {
   it('parses config path and single-search overrides', () => {
@@ -73,6 +74,21 @@ describe('parseCliArgs', () => {
     const parsed = parseCliArgs(['--city', 'Osnabrück', '--full-gastro-scan']);
     expect(parsed.fullGastroScan).toBe(true);
     expect(parsed.overrides.searchTerms).toEqual([...FULL_GASTRO_SEARCH_TERMS]);
+  });
+
+  it('uses larger category-specific caps for broad full gastro discovery', () => {
+    expect(fullGastroDepthFor('restaurant')).toBe(200);
+    expect(fullGastroDepthFor('Cafe')).toBe(180);
+    expect(fullGastroDepthFor('Pizza')).toBe(160);
+    expect(fullGastroDepthFor('indisch')).toBe(60);
+    expect(fullGastroDepthFor('Cocktailbar')).toBe(80);
+    expect(fullGastroDepthFor('unknown')).toBeUndefined();
+  });
+
+  it('keeps an explicit depth available as a manual full-scan override', () => {
+    const parsed = parseCliArgs(['--full-gastro-scan', '--depth', '75']);
+    expect(parsed.fullGastroScan).toBe(true);
+    expect(parsed.overrides.depth).toBe(75);
   });
 
   it('parses large-scan timeout controls', () => {
