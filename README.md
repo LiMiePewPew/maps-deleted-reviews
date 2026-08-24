@@ -587,4 +587,6 @@ docs/LARGE_SCAN.md
 
 ## License
 
-MIT
+This project is available under the [MIT License](LICENSE).
+
+This repository is derived from `mb4umi/maps-deleted-reviews`, whose `package.json` also declares the project as MIT licensed. The current fork retains that permissive licensing model and adds its own modifications under the same MIT license.
