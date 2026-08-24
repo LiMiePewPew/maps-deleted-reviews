@@ -3,6 +3,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { ScrapedVenue } from './types.js';
+import { venueIdentityKey } from './venueIdentity.js';
 
 export function sortScrapedRows(rows: ScrapedVenue[]): ScrapedVenue[] {
   return [...rows].sort((left, right) =>
@@ -18,17 +19,43 @@ export async function sortCsvFile(path: string): Promise<void> {
   await writeFile(path, sorted, 'utf8');
 }
 
-export async function mergeCsvFiles(outputPath: string, inputPaths: string[]): Promise<void> {
+export async function mergeCsvFiles(outputPath: string, inputPaths: string[]): Promise<number> {
   const merged = await mergeCsvTexts(
     await Promise.all(inputPaths.map((path) => readFile(path, 'utf8'))),
   );
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, merged, 'utf8');
+  return countCsvRows(merged);
+}
+
+export async function writePositiveCsvFile(sourcePath: string, outputPath: string): Promise<number> {
+  const raw = await readFile(sourcePath, 'utf8');
+  const [headerLine, ...rowLines] = raw.trim().split('\n');
+  if (!headerLine) {
+    await mkdir(dirname(outputPath), { recursive: true });
+    await writeFile(outputPath, '', 'utf8');
+    return 0;
+  }
+
+  const headers = parseCsvLine(headerLine);
+  const deletedMaxIndex = headers.indexOf('deleted_reviews_max');
+  const noticeIndex = headers.indexOf('review_notice');
+  const positiveRows = rowLines.filter(Boolean).filter((line) => {
+    const cells = parseCsvLine(line);
+    const deletedMax = parseNullableNumber(cells[deletedMaxIndex]) ?? 0;
+    const notice = noticeIndex >= 0 ? (cells[noticeIndex] ?? '').trim() : '';
+    return deletedMax > 0 || notice.length > 0;
+  });
+
+  const positiveCsv = sortCsvText(`${[headerLine, ...positiveRows].join('\n')}\n`);
+  await mkdir(dirname(outputPath), { recursive: true });
+  await writeFile(outputPath, positiveCsv, 'utf8');
+  return positiveRows.length;
 }
 
 export async function mergeCsvTexts(rawFiles: string[]): Promise<string> {
   let headerLine = '';
-  const rowsByVenueName = new Map<string, string>();
+  const rowsByVenue = new Map<string, { line: string; cells: string[]; headers: string[] }>();
 
   for (const raw of rawFiles) {
     const [currentHeaderLine, ...rowLines] = raw.trim().split('\n');
@@ -38,17 +65,21 @@ export async function mergeCsvTexts(rawFiles: string[]): Promise<string> {
 
     headerLine ||= currentHeaderLine;
     const headers = parseCsvLine(currentHeaderLine);
-    const nameIndex = headers.indexOf('name');
     for (const rowLine of rowLines.filter(Boolean)) {
       const cells = parseCsvLine(rowLine);
-      const nameKey = normalizeVenueName(cells[nameIndex] ?? '');
-      if (nameKey && !rowsByVenueName.has(nameKey)) {
-        rowsByVenueName.set(nameKey, rowLine);
+      const key = csvVenueIdentity(headers, cells);
+      if (!key) {
+        continue;
+      }
+
+      const existing = rowsByVenue.get(key);
+      if (!existing || shouldPreferCsvRow(existing.headers, existing.cells, headers, cells)) {
+        rowsByVenue.set(key, { line: rowLine, cells, headers });
       }
     }
   }
 
-  return headerLine ? `${[headerLine, ...rowsByVenueName.values()].join('\n')}\n` : '';
+  return headerLine ? `${[headerLine, ...[...rowsByVenue.values()].map((row) => row.line)].join('\n')}\n` : '';
 }
 
 export function sortCsvText(raw: string): string {
@@ -83,6 +114,72 @@ export function sortCsvText(raw: string): string {
   );
 
   return `${[headerLine, ...rows.map((row) => row.line)].join('\n')}\n`;
+}
+
+function csvVenueIdentity(headers: string[], cells: string[]): string {
+  const cell = (header: string): string => {
+    const index = headers.indexOf(header);
+    return index >= 0 ? (cells[index] ?? '') : '';
+  };
+
+  const name = cell('name').trim();
+  if (!name) {
+    return '';
+  }
+
+  return venueIdentityKey({
+    name,
+    url: cell('url').trim(),
+    address: cell('address').trim() || undefined,
+  });
+}
+
+function shouldPreferCsvRow(
+  existingHeaders: string[],
+  existingCells: string[],
+  candidateHeaders: string[],
+  candidateCells: string[],
+): boolean {
+  const existingStatus = getCell(existingHeaders, existingCells, 'status');
+  const candidateStatus = getCell(candidateHeaders, candidateCells, 'status');
+  const existingRank = statusRank(existingStatus);
+  const candidateRank = statusRank(candidateStatus);
+  if (candidateRank !== existingRank) {
+    return candidateRank > existingRank;
+  }
+
+  const existingTime = Date.parse(getCell(existingHeaders, existingCells, 'scraped_at'));
+  const candidateTime = Date.parse(getCell(candidateHeaders, candidateCells, 'scraped_at'));
+  if (Number.isFinite(existingTime) && Number.isFinite(candidateTime) && candidateTime !== existingTime) {
+    return candidateTime > existingTime;
+  }
+
+  return false;
+}
+
+function getCell(headers: string[], cells: string[], header: string): string {
+  const index = headers.indexOf(header);
+  return index >= 0 ? (cells[index] ?? '') : '';
+}
+
+function statusRank(status: string): number {
+  if (status === 'ok') {
+    return 3;
+  }
+  if (status === 'partial') {
+    return 2;
+  }
+  if (status === 'failed') {
+    return 1;
+  }
+  return 0;
+}
+
+function countCsvRows(raw: string): number {
+  if (!raw.trim()) {
+    return 0;
+  }
+  return Math.max(0, raw.trim().split('\n').length - 1);
 }
 
 function compareNullableNumbersDesc(left: number | null, right: number | null): number {
@@ -136,10 +233,6 @@ function parseCsvLine(line: string): string[] {
 
   cells.push(current);
   return cells;
-}
-
-function normalizeVenueName(name: string): string {
-  return name.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
 if (process.argv[1]?.endsWith('csvSort.ts') || process.argv[1]?.endsWith('csvSort.js')) {
