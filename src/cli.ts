@@ -1,28 +1,8 @@
 import type { BrowserBackend } from './browserRuntime.js';
+import { FULL_GASTRO_SEARCH_TERMS } from './fullGastro.js';
 import type { RawScraperConfig } from './types.js';
 
-export const FULL_GASTRO_SEARCH_TERMS = [
-  'restaurant',
-  'Cafe',
-  'bar',
-  'Hotel',
-  'Imbiss',
-  'Pizza',
-  'Döner',
-  'Sushi',
-  'Burger',
-  'Frühstück',
-  'Bäckerei',
-  'Eiscafe',
-  'italienisch',
-  'griechisch',
-  'indisch',
-  'asiatisch',
-  'vegan',
-  'Steakhouse',
-  'Pub',
-  'Cocktailbar',
-] as const;
+export { FULL_GASTRO_SEARCH_TERMS } from './fullGastro.js';
 
 export interface CliArgs {
   configPath: string;
