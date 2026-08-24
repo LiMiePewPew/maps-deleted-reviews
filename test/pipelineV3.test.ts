@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mergeDiscoveredVenuesFast, shouldBlockResourceType } from '../src/pipelineV3.js';
+import { isNegativeReviewPanelReady } from '../src/reviewPanelEvidence.js';
 
 describe('pipeline V3 discovery index', () => {
   it('deduplicates the same Maps place in O(1) index lookups', () => {
@@ -61,5 +62,37 @@ describe('pipeline V3 resource blocking', () => {
     expect(shouldBlockResourceType('script')).toBe(false);
     expect(shouldBlockResourceType('xhr')).toBe(false);
     expect(shouldBlockResourceType('fetch')).toBe(false);
+  });
+});
+
+describe('pipeline V3 negative notice certification', () => {
+  it('does not accept a generic sort control as negative evidence', () => {
+    expect(
+      isNegativeReviewPanelReady({
+        positiveNoticeVisible: false,
+        sortControlVisible: true,
+        reviewCardVisible: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('requires both a review sort control and a hydrated review card', () => {
+    expect(
+      isNegativeReviewPanelReady({
+        positiveNoticeVisible: false,
+        sortControlVisible: true,
+        reviewCardVisible: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('never certifies negative while a positive removal notice is visible', () => {
+    expect(
+      isNegativeReviewPanelReady({
+        positiveNoticeVisible: true,
+        sortControlVisible: true,
+        reviewCardVisible: true,
+      }),
+    ).toBe(false);
   });
 });
