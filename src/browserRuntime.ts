@@ -1,6 +1,5 @@
 import {
   binaryInfo,
-  ensureBinary,
   launchContext as launchCloakContext,
 } from 'cloakbrowser';
 import { chromium, type BrowserContext } from 'playwright';
@@ -19,6 +18,10 @@ type PlaywrightPersistentOptions = NonNullable<
  * existing crawler. The crawler keeps its mature Playwright page/locator API,
  * while Chromium itself is launched by CloakBrowser.
  *
+ * CloakBrowser resolves/downloads its own binary inside launchContext(). We do
+ * not call ensureBinary() separately because that duplicates license/download
+ * resolution and can stall after a first-time Pro download on some platforms.
+ *
  * We intentionally use CloakBrowser's normal context path instead of reusing
  * the historical Playwright persistent profile. The old profile is not needed
  * for Google Maps discovery and can make a browser migration fail because of
@@ -36,24 +39,11 @@ export function installCloakBrowserRuntime(): void {
     options: PlaywrightPersistentOptions = {},
   ): Promise<BrowserContext> => {
     if (!startupLogged) {
-      console.log('CloakBrowser: checking stealth Chromium binary...');
-    }
-
-    const binaryPath = await withTimeout(
-      ensureBinary(),
-      CLOAK_STARTUP_TIMEOUT_MS,
-      'CloakBrowser binary preparation timed out',
-    );
-
-    if (!startupLogged) {
       const info = binaryInfo();
       console.log(
-        `CloakBrowser: binary ready (${info.version ?? 'unknown version'}, ${info.tier ?? 'unknown tier'})`,
+        `CloakBrowser: launching ${options.headless ? 'headless' : 'headed'} context ` +
+          `(${info.installed ? `cached ${info.version ?? 'binary'}` : 'binary will be prepared by CloakBrowser'})...`,
       );
-      console.log(`CloakBrowser: launching ${options.headless ? 'headless' : 'headed'} context...`);
-      // Keep the path out of normal logs unless diagnosing startup. The existence
-      // check above already guarantees that the wrapper resolved a binary.
-      void binaryPath;
     }
 
     const context = await withTimeout(
@@ -68,7 +58,11 @@ export function installCloakBrowserRuntime(): void {
     );
 
     if (!startupLogged) {
-      console.log(`CloakBrowser: started (${context.pages().length} initial page${context.pages().length === 1 ? '' : 's'})`);
+      const info = binaryInfo();
+      console.log(
+        `CloakBrowser: started (${info.version ?? 'unknown version'}, ${info.tier ?? 'unknown tier'}, ` +
+          `${context.pages().length} initial page${context.pages().length === 1 ? '' : 's'})`,
+      );
       startupLogged = true;
     }
 
