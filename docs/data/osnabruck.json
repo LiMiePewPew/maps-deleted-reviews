@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "city": "Osnabrück",
+  "generatedAt": null,
+  "source": "Google Maps public review-deletion notices",
+  "sourceCsv": null,
+  "summary": {
+    "observedVenues": 0,
+    "noticesFound": 0,
+    "noNoticeObserved": 0,
+    "uncertain": 0,
+    "failed": 0,
+    "visibleReviews": 0,
+    "largestNoticeMax": 0,
+    "lastScrapedAt": null
+  },
+  "venues": []
+}
