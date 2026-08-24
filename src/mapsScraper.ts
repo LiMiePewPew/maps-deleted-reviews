@@ -26,6 +26,8 @@ type BlockerKind = 'rate-limit' | 'sign-in';
 
 const RATE_LIMIT_USER_WAIT_MS = 60_000;
 const NAVIGATION_ATTEMPTS = 2;
+const NOTICE_POLL_TIMEOUT_MS = 6_000;
+const NOTICE_POLL_INTERVAL_MS = 500;
 const batchVenueCache = new Map<string, ScrapedVenue>();
 
 interface Blocker {
@@ -181,7 +183,7 @@ async function scrapeVenues(
     }
 
     const cached = batchVenueCache.get(venueIdentityKey(venue));
-    if (cached?.status === 'ok') {
+    if (cached && shouldCacheBatchVenue(cached)) {
       const reused = reuseCachedVenue(cached, venue, config.searchTerm);
       upsertScrapedRow(rows, reused);
       markVenueCompleted(state, venue.url);
@@ -239,7 +241,7 @@ async function refetchSuspectRows(
   for (const row of suspectRows) {
     const venue = state.discoveredVenues.find((candidate) => candidate.url === row.url) ?? row;
     const cached = batchVenueCache.get(venueIdentityKey(venue));
-    if (cached?.status === 'ok') {
+    if (cached && shouldCacheBatchVenue(cached)) {
       const reused = reuseCachedVenue(cached, venue, config.searchTerm);
       upsertScrapedRow(rows, reused);
       markVenueCompleted(state, venue.url);
@@ -336,6 +338,10 @@ export function shouldStartFreshRun(
   );
 }
 
+export function shouldCacheBatchVenue(row: ScrapedVenue): boolean {
+  return row.status === 'ok' && row.deletedReviewNotice !== null && row.deletedReviewsMax > 0;
+}
+
 export function upsertScrapedRow(rows: ScrapedVenue[], row: ScrapedVenue): void {
   const key = venueIdentityKey(row);
   const index = rows.findIndex((candidate) => venueIdentityKey(candidate) === key);
@@ -393,7 +399,16 @@ async function scrapeVenue(
     pageText = await getExtractionText(page);
   }
 
-  const deleted = parseDeletedReviews(pageText);
+  let deleted = parseDeletedReviews(pageText);
+  if (openedReviews && deleted === null) {
+    const pollStartedAt = Date.now();
+    while (deleted === null && Date.now() - pollStartedAt < NOTICE_POLL_TIMEOUT_MS) {
+      await page.waitForTimeout(NOTICE_POLL_INTERVAL_MS);
+      pageText = await getExtractionText(page);
+      deleted = parseDeletedReviews(pageText);
+    }
+  }
+
   const totalReviews = parseReviewCount(pageText) ?? overviewReviewCount;
   const rating = overviewRating ?? parseStarRating(pageText);
   const metrics = calculateMetrics({
@@ -403,7 +418,9 @@ async function scrapeVenue(
   });
 
   const status: ScrapedVenue['status'] =
-    totalReviews === null || rating === null ? 'partial' : 'ok';
+    totalReviews === null || rating === null || (!openedReviews && deleted === null)
+      ? 'partial'
+      : 'ok';
 
   return {
     ...venue,
@@ -734,7 +751,7 @@ async function randomDelay(config: ScraperConfig): Promise<void> {
 }
 
 function cacheSuccessfulVenue(row: ScrapedVenue): void {
-  if (row.status !== 'ok') {
+  if (!shouldCacheBatchVenue(row)) {
     return;
   }
   batchVenueCache.set(venueIdentityKey(row), row);
