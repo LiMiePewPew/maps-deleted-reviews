@@ -1,7 +1,6 @@
 import {
   binaryInfo,
-  buildContextOptions,
-  buildLaunchOptions,
+  launchPersistentContext as launchCloakPersistentContext,
 } from 'cloakbrowser';
 import { chromium, type BrowserContext } from 'playwright';
 
@@ -13,8 +12,6 @@ const HEADED_WINDOW_WIDTH = 1440;
 const HEADED_WINDOW_HEIGHT = 1100;
 const MIN_CONTEXT_PAGES = 2;
 
-const playwrightLaunchPersistentContext = chromium.launchPersistentContext.bind(chromium);
-
 type PlaywrightPersistentOptions = NonNullable<
   Parameters<typeof chromium.launchPersistentContext>[1]
 >;
@@ -22,19 +19,23 @@ type PlaywrightPersistentOptions = NonNullable<
 /**
  * Installs CloakBrowser behind the Playwright BrowserType object used by the
  * existing crawler. The crawler keeps its mature Playwright page/locator API,
- * while Chromium itself is CloakBrowser's patched stealth binary.
+ * while Chromium itself is launched through CloakBrowser's official persistent
+ * context API.
  *
- * We intentionally use CloakBrowser's official buildLaunchOptions() and
- * buildContextOptions() integration surface, then call Playwright's original
- * launchPersistentContext(). This avoids CloakBrowser's higher-level
- * launchContext()/humanize/license-guard wrapping, which caused a Node heap OOM
- * on macOS during startup, while preserving both the patched Chromium binary and
- * the crawler's persistent browser profile.
+ * Earlier integration attempts manually combined buildLaunchOptions() with
+ * Playwright's launchPersistentContext(). That hybrid path could start Chromium
+ * but the browser process closed on the first Google Maps navigation on macOS.
+ * Using CloakBrowser's own launchPersistentContext() keeps its binary, profile,
+ * launch arguments, licensing and persistent-context lifecycle in one supported
+ * code path.
  *
- * We also keep one spare about:blank page alive. Pipeline V3 closes its worker
- * pages between discovery and notice checking; Cloak Chromium on macOS can exit
- * when the final browser window disappears. The spare page is deliberately not
- * part of the worker pools and is closed only when the context itself closes.
+ * We keep humanize disabled because the crawler already drives normal Playwright
+ * actions and a previous high-level humanize launch path caused excessive Node
+ * heap growth. We also avoid a separate ensureBinary() preflight because the
+ * official launcher resolves the cached binary itself.
+ *
+ * Two initial pages are kept so Pipeline V3 can close discovery worker pages
+ * without ever removing the last browser window before notice checking starts.
  *
  * We do not add proxy rotation, CAPTCHA solving, or challenge bypass logic.
  */
@@ -56,47 +57,24 @@ export function installCloakBrowserRuntime(): void {
     const headless = options.headless ?? false;
     if (!startupLogged) {
       console.log(
-        `CloakBrowser: launching ${headless ? 'headless' : 'headed'} (${info.version ?? 'unknown version'}, ${info.tier ?? 'unknown tier'}, persistent Playwright integration)...`,
+        `CloakBrowser: launching ${headless ? 'headless' : 'headed'} (${info.version ?? 'unknown version'}, ${info.tier ?? 'unknown tier'}, official persistent context)...`,
       );
     }
 
-    const cloakOptions = {
-      headless,
-      locale: options.locale,
-      viewport: headless ? (options.viewport ?? undefined) : null,
-      args: headless ? [] : [`--window-size=${HEADED_WINDOW_WIDTH},${HEADED_WINDOW_HEIGHT}`],
-      humanize: false,
-    };
-
-    const launchOptions = await withTimeout(
-      buildLaunchOptions(cloakOptions),
-      CLOAK_STARTUP_TIMEOUT_MS,
-      'CloakBrowser launch-option preparation timed out',
-    );
-    const contextOptions = buildContextOptions(cloakOptions) as PlaywrightPersistentOptions;
-
-    const launchArgs = Array.isArray((launchOptions as PlaywrightPersistentOptions).args)
-      ? ((launchOptions as PlaywrightPersistentOptions).args ?? [])
-      : [];
-    const callerArgs = options.args ?? [];
-
-    const persistentOptions: PlaywrightPersistentOptions = {
-      ...(launchOptions as PlaywrightPersistentOptions),
-      ...contextOptions,
-      ...options,
-      headless,
-      args: [...new Set([...launchArgs, ...callerArgs])],
-      locale: options.locale ?? contextOptions.locale,
-      viewport: headless ? (options.viewport ?? contextOptions.viewport) : null,
-    };
-
     const context = await withTimeout(
-      playwrightLaunchPersistentContext(userDataDir, persistentOptions),
+      launchCloakPersistentContext({
+        userDataDir,
+        headless,
+        locale: options.locale,
+        viewport: options.viewport ?? { width: HEADED_WINDOW_WIDTH, height: HEADED_WINDOW_HEIGHT },
+        args: headless ? [] : [`--window-size=${HEADED_WINDOW_WIDTH},${HEADED_WINDOW_HEIGHT}`],
+        humanize: false,
+      }),
       CLOAK_STARTUP_TIMEOUT_MS,
       'CloakBrowser persistent context launch timed out',
     );
 
-    await ensureSpareKeepalivePage(context);
+    await ensureSpareKeepalivePage(context as unknown as BrowserContext);
 
     if (!startupLogged) {
       console.log('CloakBrowser: persistent profile enabled');
@@ -104,7 +82,7 @@ export function installCloakBrowserRuntime(): void {
       startupLogged = true;
     }
 
-    return context;
+    return context as unknown as BrowserContext;
   };
 
   Object.defineProperty(chromium, 'launchPersistentContext', {
