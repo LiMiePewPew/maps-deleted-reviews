@@ -30,6 +30,7 @@ describe('parseCliArgs', () => {
       },
       fullGastroScan: false,
       workers: 1,
+      placesFile: undefined,
     });
   });
 
@@ -73,6 +74,22 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['--workers', '2']).workers).toBe(2);
     expect(() => parseCliArgs(['--workers', '0'])).toThrow(/between 1 and 8/);
     expect(() => parseCliArgs(['--workers', '9'])).toThrow(/between 1 and 8/);
+  });
+
+  it('parses an external places file', () => {
+    const parsed = parseCliArgs(['--places-file', 'output/gosom.csv', '--workers', '2']);
+    expect(parsed.placesFile).toBe('output/gosom.csv');
+    expect(parsed.workers).toBe(2);
+  });
+
+  it('accepts gosom-results as an alias', () => {
+    expect(parseCliArgs(['--gosom-results', 'results.csv']).placesFile).toBe('results.csv');
+  });
+
+  it('rejects imported discovery together with built-in full discovery', () => {
+    expect(() =>
+      parseCliArgs(['--places-file', 'results.csv', '--full-gastro-scan']),
+    ).toThrow(/cannot be used together/);
   });
 
   it('parses large-scan timeout controls', () => {
