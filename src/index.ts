@@ -5,7 +5,7 @@ import { parseCliArgs } from './cli.js';
 import { loadConfigs } from './config.js';
 import { mergeCsvFiles } from './csvSort.js';
 import { resetBatchVenueCache, runScraper } from './mapsScraper.js';
-import { runCityPipeline } from './pipelineV2.js';
+import { runCityPipelineV3 } from './pipelineV3.js';
 import { formatRunSummary, writeRunSummary } from './summary.js';
 
 async function main(): Promise<void> {
@@ -24,17 +24,25 @@ async function main(): Promise<void> {
   }
 
   if (cli.fullGastroScan) {
-    const summary = await runCityPipeline(configs, cli.workers);
-    console.log('\n=== PIPELINE V2 SUMMARY ===');
+    const summary = await runCityPipelineV3(configs, {
+      noticeWorkers: cli.workers,
+      discoveryWorkers: cli.discoveryWorkers,
+    });
+    console.log('\n=== PIPELINE V3 SUMMARY ===');
     console.log(`City: ${summary.city}, ${summary.country}`);
     console.log(`Search terms: ${summary.searchTerms}`);
+    console.log(`Raw discovery slots: ${summary.rawDiscoverySlots}`);
     console.log(`Unique venues: ${summary.discoveredVenues}`);
+    console.log(`Dedupe saved checks: ${summary.dedupeSavings}`);
     console.log(`Checked venues: ${summary.checkedVenues}`);
     console.log(`Removal notices: ${summary.noticeVenues}`);
     console.log(`Partial: ${summary.partialVenues}`);
     console.log(`Failed: ${summary.failedVenues}`);
-    console.log(`Workers: ${summary.workers}`);
+    console.log(`Discovery workers: ${summary.discoveryWorkers}`);
+    console.log(`Notice workers: ${summary.noticeWorkers}`);
     console.log(`Mode: ${summary.headed ? 'headed' : 'headless'}`);
+    console.log(`Discovery runtime: ${(summary.discoveryDurationMs / 1000).toFixed(1)}s`);
+    console.log(`Notice runtime: ${(summary.noticeDurationMs / 1000).toFixed(1)}s`);
     console.log(`Output: ${summary.outputPath}`);
     console.log(`Positive: ${summary.positivePath}`);
     console.log(`State: ${summary.statePath}`);
