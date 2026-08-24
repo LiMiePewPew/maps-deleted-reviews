@@ -29,6 +29,7 @@ describe('parseCliArgs', () => {
         sortCsv: false,
       },
       fullGastroScan: false,
+      workers: 1,
     });
   });
 
@@ -66,6 +67,12 @@ describe('parseCliArgs', () => {
     const parsed = parseCliArgs(['--city', 'Osnabrück', '--full-gastro-scan']);
     expect(parsed.fullGastroScan).toBe(true);
     expect(parsed.overrides.searchTerms).toEqual([...FULL_GASTRO_SEARCH_TERMS]);
+  });
+
+  it('parses worker count for pipeline scans', () => {
+    expect(parseCliArgs(['--workers', '2']).workers).toBe(2);
+    expect(() => parseCliArgs(['--workers', '0'])).toThrow(/between 1 and 8/);
+    expect(() => parseCliArgs(['--workers', '9'])).toThrow(/between 1 and 8/);
   });
 
   it('parses large-scan timeout controls', () => {
