@@ -26,6 +26,8 @@ type BlockerKind = 'rate-limit' | 'sign-in';
 
 const RATE_LIMIT_USER_WAIT_MS = 60_000;
 const NAVIGATION_ATTEMPTS = 2;
+const VENUE_DATA_WAIT_MS = 8_000;
+const REVIEW_DATA_WAIT_MS = 5_000;
 const batchVenueCache = new Map<string, ScrapedVenue>();
 
 interface Blocker {
@@ -287,6 +289,8 @@ async function scrapeVenueWithRateLimitRetry(
   state: ScraperState,
   venue: Venue,
 ): Promise<ScrapedVenue> {
+  let lastPartial: ScrapedVenue | null = null;
+
   for (let attempt = 0; attempt < 2; attempt += 1) {
     await navigateWithRetry(page, venue.url, config, venue.name);
     await maybeAcceptConsent(page);
@@ -301,11 +305,18 @@ async function scrapeVenueWithRateLimitRetry(
     }
 
     await handleBlocker(page, config, state, blocker);
-    await waitForVenueShell(page, venue);
-    return scrapeVenue(page, venue, config.searchTerm);
+    const scraped = await scrapeVenue(page, venue, config.searchTerm);
+    if (scraped.status === 'ok') {
+      return scraped;
+    }
+
+    lastPartial = scraped;
+    if (attempt === 0) {
+      console.warn(`Incomplete venue data for "${venue.name}". Retrying once.`);
+    }
   }
 
-  return toFailedRow(venue, 'Google rate-limit challenge persisted after retry', config.searchTerm);
+  return lastPartial ?? toFailedRow(venue, 'Venue data remained incomplete after retry', config.searchTerm);
 }
 
 export function shouldRefetchScrapedRow(row: ScrapedVenue): boolean {
@@ -373,24 +384,15 @@ async function scrapeVenue(
   venue: Venue,
   venueType: string,
 ): Promise<ScrapedVenue> {
-  let overviewText = await getExtractionText(page);
-  if (parseStarRating(overviewText) === null && parseReviewCount(overviewText) === null) {
-    await page.waitForTimeout(700);
-    overviewText = await getExtractionText(page);
-  }
-
+  const overviewText = await waitForVenueData(page, VENUE_DATA_WAIT_MS);
   const overviewRating = parseStarRating(overviewText);
   const overviewReviewCount = parseReviewCount(overviewText);
 
   const openedReviews = await openReviewsTab(page);
+  let pageText = overviewText;
   if (openedReviews) {
     await waitForReviewsPanel(page);
-  }
-
-  let pageText = openedReviews ? await getExtractionText(page) : overviewText;
-  if (openedReviews && parseReviewCount(pageText) === null) {
-    await page.waitForTimeout(700);
-    pageText = await getExtractionText(page);
+    pageText = await waitForReviewData(page, REVIEW_DATA_WAIT_MS, overviewText);
   }
 
   const deleted = parseDeletedReviews(pageText);
@@ -403,7 +405,7 @@ async function scrapeVenue(
   });
 
   const status: ScrapedVenue['status'] =
-    totalReviews === null || rating === null ? 'partial' : 'ok';
+    totalReviews === null || rating === null || !openedReviews ? 'partial' : 'ok';
 
   return {
     ...venue,
@@ -419,6 +421,39 @@ async function scrapeVenue(
     scrapedAt: new Date().toISOString(),
     status,
   };
+}
+
+async function waitForVenueData(page: Page, timeoutMs: number): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let lastText = '';
+
+  do {
+    lastText = await getExtractionText(page).catch(() => lastText);
+    if (parseStarRating(lastText) !== null && parseReviewCount(lastText) !== null) {
+      return lastText;
+    }
+    await page.waitForTimeout(300).catch(() => undefined);
+  } while (Date.now() < deadline && !page.isClosed());
+
+  return lastText;
+}
+
+async function waitForReviewData(page: Page, timeoutMs: number, fallback: string): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let lastText = fallback;
+
+  do {
+    lastText = await getExtractionText(page).catch(() => lastText);
+    if (
+      parseDeletedReviews(lastText) !== null ||
+      /Sortieren|Neueste|Relevanteste|Most relevant|Newest/i.test(lastText)
+    ) {
+      return lastText;
+    }
+    await page.waitForTimeout(250).catch(() => undefined);
+  } while (Date.now() < deadline && !page.isClosed());
+
+  return lastText;
 }
 
 async function waitForFirstSearchResult(page: Page): Promise<void> {
@@ -446,16 +481,6 @@ async function waitForResultListChange(
     .catch(async () => {
       await page.waitForTimeout(minimumDelayMs).catch(() => undefined);
     });
-}
-
-async function waitForVenueShell(page: Page, venue: Venue): Promise<void> {
-  await page
-    .waitForFunction(
-      (name) => document.body.innerText.includes(name) && /[1-5],[0-9]|Rezension/.test(document.body.innerText),
-      venue.name,
-      { timeout: 1_300 },
-    )
-    .catch(() => undefined);
 }
 
 async function waitForReviewsPanel(page: Page): Promise<void> {
