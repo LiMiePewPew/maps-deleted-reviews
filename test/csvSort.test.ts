@@ -50,6 +50,41 @@ describe('mergeCsvFiles', () => {
     expect(rows[0]).toContain(',120,1,50,30,');
   });
 
+  it('preserves an observed positive notice when a later duplicate has no notice', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'maps-merge-positive-'));
+    const firstPath = join(tempDir, 'first.csv');
+    const secondPath = join(tempDir, 'second.csv');
+    const outputPath = join(tempDir, 'merged.csv');
+    const header =
+      'venue_type,name,total_reviews,deleted_reviews_min,deleted_reviews_max,percentage_deleted,current_star_rating,real_score,review_notice,url,address,deleted_reviews_estimate,status,error,scraped_at';
+
+    await writeFile(
+      firstPath,
+      [
+        header,
+        'Sushi,Kakkoii Sushi Grill & Bar,1362,201,250,14.22,4.3,3.8,201 bis 250 Bewertungen aufgrund von Beschwerden wegen Diffamierung entfernt.,https://www.google.de/maps/place/Kakkoii/data=!1m1,,225.5,ok,,2026-04-30T09:00:00.000Z',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      secondPath,
+      [
+        header,
+        'Imbiss,Kakkoii Sushi Grill & Bar,1362,0,0,0,4.3,4.3,,https://www.google.de/maps/place/Kakkoii/data=!1m1?entry=ttu,,0,ok,,2026-04-30T09:10:00.000Z',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const count = await mergeCsvFiles(outputPath, [firstPath, secondPath]);
+    const raw = await readFile(outputPath, 'utf8');
+
+    expect(count).toBe(1);
+    expect(raw).toContain(',201,250,');
+    expect(raw).toContain('201 bis 250 Bewertungen aufgrund von Beschwerden wegen Diffamierung entfernt.');
+  });
+
   it('falls back to normalized name and address when no URL exists', async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'maps-merge-name-'));
     const firstPath = join(tempDir, 'first.csv');
