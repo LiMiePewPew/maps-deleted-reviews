@@ -10,7 +10,7 @@ import { formatRunSummary, writeRunSummary } from './summary.js';
 import type { ScraperConfig } from './types.js';
 
 const BETWEEN_BATCH_RUNS_DELAY_MS = 500;
-const BROWSER_RECOVERY_DELAY_MS = 1_500;
+const TRANSIENT_RECOVERY_DELAYS_MS = [1_500, 3_000] as const;
 
 async function main(): Promise<void> {
   const cli = parseCliArgs(process.argv.slice(2));
@@ -43,7 +43,7 @@ async function main(): Promise<void> {
     console.log(`State: ${config.statePath}`);
 
     try {
-      const summary = await runScraperWithBrowserRecovery(config, cli.fullGastroScan);
+      const summary = await runScraperWithTransientRecovery(config, cli.fullGastroScan);
       await writeRunSummary(summary);
       console.log(formatRunSummary(summary));
       candidateOutputPaths.add(config.outputCsvPath);
@@ -104,28 +104,48 @@ async function main(): Promise<void> {
   console.log('Done.');
 }
 
-async function runScraperWithBrowserRecovery(
+async function runScraperWithTransientRecovery(
   config: ScraperConfig,
   enableRecovery: boolean,
 ): ReturnType<typeof runScraper> {
-  try {
-    return await runScraper(config);
-  } catch (error) {
-    if (!enableRecovery || !isBrowserClosedError(error)) {
-      throw error;
-    }
+  let lastError: unknown;
 
-    console.warn(
-      `Browser closed unexpectedly during "${config.searchTerm}"; waiting ${BROWSER_RECOVERY_DELAY_MS}ms and retrying this search term once.`,
-    );
-    await sleep(BROWSER_RECOVERY_DELAY_MS);
-    return runScraper(config);
+  for (let attempt = 0; attempt <= TRANSIENT_RECOVERY_DELAYS_MS.length; attempt += 1) {
+    try {
+      return await runScraper(config);
+    } catch (error) {
+      lastError = error;
+      if (!enableRecovery || !isTransientRunError(error) || attempt >= TRANSIENT_RECOVERY_DELAYS_MS.length) {
+        throw error;
+      }
+
+      const delayMs = TRANSIENT_RECOVERY_DELAYS_MS[attempt] ?? 1_500;
+      const message = error instanceof Error ? error.message : String(error);
+      const shortReason = transientReason(message);
+      console.warn(
+        `Transient ${shortReason} during "${config.searchTerm}"; waiting ${delayMs}ms and retrying this search term with a fresh browser (${attempt + 1}/${TRANSIENT_RECOVERY_DELAYS_MS.length}).`,
+      );
+      await sleep(delayMs);
+    }
   }
+
+  throw lastError;
 }
 
-function isBrowserClosedError(error: unknown): boolean {
+function isTransientRunError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /Target page, context or browser has been closed|Browser page closed/i.test(message);
+  return /Target page, context or browser has been closed|Browser page closed|net::ERR_ABORTED|net::ERR_NETWORK_CHANGED|net::ERR_CONNECTION_RESET|net::ERR_CONNECTION_CLOSED|net::ERR_TIMED_OUT/i.test(
+    message,
+  );
+}
+
+function transientReason(message: string): string {
+  if (/ERR_ABORTED/i.test(message)) return 'navigation abort';
+  if (/ERR_NETWORK_CHANGED/i.test(message)) return 'network change';
+  if (/ERR_CONNECTION_RESET/i.test(message)) return 'connection reset';
+  if (/ERR_CONNECTION_CLOSED/i.test(message)) return 'connection close';
+  if (/ERR_TIMED_OUT/i.test(message)) return 'navigation timeout';
+  return 'browser close';
 }
 
 async function sleep(milliseconds: number): Promise<void> {
