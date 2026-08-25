@@ -43,6 +43,20 @@ describe('parseDeletedReviews', () => {
     });
   });
 
+  it('recognizes the open-ended German over-250 bucket before the single-count matcher', () => {
+    const text =
+      'Über 250 Bewertungen aufgrund von Beschwerden wegen Diffamierung entfernt.';
+
+    expect(parseDeletedReviews(text)).toEqual({
+      min: 250,
+      max: 250,
+      estimate: 250,
+      rawText: text,
+      openEnded: true,
+      rangeKey: 'over_250',
+    });
+  });
+
   it('returns null when no deleted-review notice is present', () => {
     expect(parseDeletedReviews('Keine passende Meldung')).toBeNull();
   });
