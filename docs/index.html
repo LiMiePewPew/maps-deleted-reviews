@@ -3,35 +3,35 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#0b1020" />
+    <meta name="theme-color" content="#f7f7f4" />
     <meta
       name="description"
-      content="Öffentliche Google-Maps-Transparenzhinweise zu entfernten Bewertungen in Osnabrück, mit Statistiken und durchsuchbarem Datensatz."
+      content="Öffentlich sichtbare Google-Hinweise zu entfernten Bewertungen bei Betrieben in und um Osnabrück."
     />
-    <title>Review Transparency · Osnabrück</title>
+    <title>Google-Hinweise zu entfernten Bewertungen · Osnabrück</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="page-shell">
       <header class="site-header">
-        <a class="brand" href="./" aria-label="Review Transparency Startseite">
-          <span class="brand-mark" aria-hidden="true">RT</span>
+        <a class="brand" href="./" aria-label="Startseite">
+          <span class="brand-mark" aria-hidden="true">OS</span>
           <span>
-            <strong>Review Transparency</strong>
+            <strong>Google-Bewertungen</strong>
             <small>Osnabrück</small>
           </span>
         </a>
 
         <nav class="header-nav" aria-label="Hauptnavigation">
-          <a href="#analyse">Statistiken</a>
-          <a href="#daten">Datensatz</a>
-          <a href="#methodik">Methodik</a>
+          <a href="#analyse">Zahlen</a>
+          <a href="#daten">Betriebe</a>
+          <a href="#methodik">Wie erhoben?</a>
           <a
             class="github-link"
             href="https://github.com/LiMiePewPew/maps-deleted-reviews"
             target="_blank"
             rel="noreferrer"
-          >Code ↗</a>
+          >GitHub ↗</a>
         </nav>
       </header>
 
@@ -39,91 +39,85 @@
         <section class="hero">
           <div class="hero-grid">
             <div class="hero-copy">
-              <p class="eyebrow">Google Maps Transparency Observer</p>
-              <h1>Ein tieferer Blick auf Google Bewertungen in Osnabrück.</h1>
+              <h1>Hinweise zu entfernten Google-Bewertungen in Osnabrück</h1>
               <p class="hero-lede">
-                Google zeigt bei manchen Unternehmensprofilen öffentlich an, in welchem Bereich
-                Bewertungen nach Beschwerden wegen Diffamierung entfernt wurden. Dieses Projekt
-                sammelt diese Hinweise und macht den Osnabrücker Datensatz verständlich durchsuchbar.
+                Ich bin auf diese Hinweise gestoßen, als ich eigentlich nur nach einem neuen Döner
+                gesucht habe. Google blendet bei manchen Unternehmensprofilen ein, in welchem Bereich
+                Bewertungen nach Beschwerden wegen Diffamierung entfernt wurden. Weil diese Angabe
+                leicht zu übersehen ist, habe ich die öffentlich sichtbaren Hinweise für Osnabrück gesammelt.
               </p>
 
               <div class="hero-meta-row">
-                <span class="live-pill"><span class="status-dot" aria-hidden="true"></span>Öffentlicher Datensatz</span>
                 <span id="last-updated">Noch kein Datensatz veröffentlicht</span>
+                <a href="#methodik">Wie die Daten entstanden sind</a>
               </div>
             </div>
 
-            <aside class="hero-insight" aria-label="Kurzfassung">
-              <span class="insight-kicker">Kurz gesagt</span>
+            <aside class="hero-insight" aria-label="Stand des Datensatzes">
+              <h2>Stand des letzten Crawls</h2>
               <strong id="snapshot-headline">Daten werden geladen…</strong>
-              <p id="snapshot-copy">
-                Die Kennzahlen werden direkt aus dem veröffentlichten Crawl berechnet.
-              </p>
+              <p id="snapshot-copy">Die Zahlen werden aus dem veröffentlichten Datensatz berechnet.</p>
             </aside>
           </div>
 
           <div class="hero-disclaimer">
-            <span class="disclaimer-icon" aria-hidden="true">i</span>
+            <strong>Wichtig:</strong>
             <p>
-              <strong>Kein Schuldurteil:</strong> Ein solcher Hinweis beweist weder Manipulation noch
-              Fehlverhalten eines Unternehmens. Bewertungen können vollkommen berechtigt entfernt
-              worden sein. Gezeigt wird ausschließlich, was Google Maps öffentlich eingeblendet hat.
+              Ein solcher Hinweis sagt nicht, dass ein Betrieb Bewertungen unrechtmäßig entfernen ließ.
+              Viele Löschungen können völlig berechtigt sein. Hier wird nur wiedergegeben, was Google
+              zum Zeitpunkt des Crawls öffentlich angezeigt hat.
             </p>
           </div>
         </section>
 
         <section class="stats" aria-label="Kennzahlen">
-          <article class="stat-card primary-stat">
-            <span class="stat-label">Betriebe beobachtet</span>
+          <article class="stat-card">
+            <span class="stat-label">Betriebe im Datensatz</span>
             <strong class="stat-value" id="stat-observed">—</strong>
-            <span class="stat-foot">deduplizierte Profile</span>
+            <span class="stat-foot">nach dem Zusammenführen von Dopplungen</span>
           </article>
           <article class="stat-card">
-            <span class="stat-label">Hinweise gefunden</span>
+            <span class="stat-label">Mit Google-Hinweis</span>
             <strong class="stat-value" id="stat-notices">—</strong>
-            <span class="stat-foot">öffentliche Google-Hinweise</span>
+            <span class="stat-foot">Hinweis im Crawl gefunden</span>
           </article>
           <article class="stat-card">
-            <span class="stat-label">Anteil mit Hinweis</span>
+            <span class="stat-label">Anteil</span>
             <strong class="stat-value" id="stat-share">—</strong>
-            <span class="stat-foot">im beobachteten Datensatz</span>
+            <span class="stat-foot">bezogen auf den erfassten Datensatz</span>
           </article>
           <article class="stat-card">
-            <span class="stat-label">Bereich 50+</span>
+            <span class="stat-label">Bereich bis mindestens 50</span>
             <strong class="stat-value" id="stat-50plus">—</strong>
-            <span class="stat-foot">Hinweise mit Obergrenze ≥ 50</span>
+            <span class="stat-foot">obere Grenze 50 oder höher</span>
           </article>
           <article class="stat-card">
-            <span class="stat-label">Bereich 100+</span>
+            <span class="stat-label">Bereich bis mindestens 100</span>
             <strong class="stat-value" id="stat-100plus">—</strong>
-            <span class="stat-foot">Hinweise mit Obergrenze ≥ 100</span>
+            <span class="stat-foot">obere Grenze 100 oder höher</span>
           </article>
           <article class="stat-card">
-            <span class="stat-label">Unvollständig</span>
+            <span class="stat-label">Nicht vollständig geprüft</span>
             <strong class="stat-value" id="stat-uncertain">—</strong>
-            <span class="stat-foot">gezielt nachprüfbare Fälle</span>
+            <span class="stat-foot">kann später gezielt nachgeprüft werden</span>
           </article>
         </section>
 
         <section class="analysis-section" id="analyse" aria-labelledby="analysis-title">
-          <div class="section-heading split-heading">
+          <div class="section-heading">
             <div>
-              <span class="section-kicker">Auswertung</span>
-              <h2 id="analysis-title">Was zeigt der aktuelle Crawl?</h2>
+              <h2 id="analysis-title">Was ist im Datensatz zu sehen?</h2>
             </div>
             <p>
-              Die Statistiken werden im Browser aus dem veröffentlichten Datensatz berechnet. Sie
-              beschreiben Beobachtungen, nicht die Gründe für einzelne Löschungen.
+              Die Auswertung bezieht sich nur auf den letzten Crawl. Sie sagt nichts darüber aus,
+              warum einzelne Bewertungen entfernt wurden.
             </p>
           </div>
 
           <div class="analysis-grid">
             <article class="panel range-panel">
               <div class="panel-heading">
-                <div>
-                  <span class="panel-kicker">Verteilung</span>
-                  <h3>Beobachtete Hinweisbereiche</h3>
-                </div>
+                <h3>Verteilung der angezeigten Bereiche</h3>
                 <span class="panel-meta" id="range-total">— Hinweise</span>
               </div>
               <div id="range-chart" class="bar-chart" aria-label="Verteilung der Hinweisbereiche"></div>
@@ -131,56 +125,46 @@
 
             <article class="panel quality-panel">
               <div class="panel-heading">
-                <div>
-                  <span class="panel-kicker">Datenqualität</span>
-                  <h3>Status des Datensatzes</h3>
-                </div>
+                <h3>Wie vollständig war der Crawl?</h3>
               </div>
 
               <div class="quality-visual">
                 <div class="quality-ring" id="quality-ring" aria-hidden="true">
                   <div class="quality-ring-inner">
                     <strong id="quality-value">—</strong>
-                    <span>vollständig</span>
+                    <span>vollständig geprüft</span>
                   </div>
                 </div>
 
                 <div class="quality-legend">
-                  <div><span class="legend-dot notice-dot"></span><span>Mit Hinweis</span><strong id="quality-notice">—</strong></div>
+                  <div><span class="legend-dot notice-dot"></span><span>Hinweis gefunden</span><strong id="quality-notice">—</strong></div>
                   <div><span class="legend-dot observed-dot"></span><span>Kein Hinweis beobachtet</span><strong id="quality-clean">—</strong></div>
-                  <div><span class="legend-dot uncertain-dot"></span><span>Unvollständig / fehlgeschlagen</span><strong id="quality-uncertain">—</strong></div>
+                  <div><span class="legend-dot uncertain-dot"></span><span>Nicht vollständig</span><strong id="quality-uncertain">—</strong></div>
                 </div>
               </div>
             </article>
 
             <article class="panel category-panel">
               <div class="panel-heading">
-                <div>
-                  <span class="panel-kicker">Kategorien</span>
-                  <h3>Hinweise nach erfasster Kategorie</h3>
-                </div>
-                <span class="panel-meta">Top 8 nach Hinweiszahl</span>
+                <h3>Hinweise nach Suchkategorie</h3>
+                <span class="panel-meta">8 Kategorien mit den meisten Treffern</span>
               </div>
               <div id="category-chart" class="category-chart"></div>
               <p class="panel-note">
-                Ein Betrieb kann in mehreren Google-Suchen auftauchen. Im zusammengeführten Datensatz
-                bleibt eine erfasste Kategorie pro Profil erhalten, daher ist dies eine deskriptive
-                Übersicht und keine vollständige Marktanteilsanalyse.
+                Die Kategorien stammen aus den Suchbegriffen des Crawls. Ein Betrieb kann bei Google
+                zu mehreren Suchbegriffen passen; im zusammengeführten Datensatz bleibt eine Kategorie stehen.
               </p>
             </article>
 
             <article class="panel signal-panel">
               <div class="panel-heading">
-                <div>
-                  <span class="panel-kicker">Snapshot</span>
-                  <h3>Weitere Kennzahlen</h3>
-                </div>
+                <h3>Weitere Zahlen</h3>
               </div>
               <div class="signal-list">
-                <div class="signal-row"><span>Summe sichtbarer Review-Anzahlen</span><strong id="signal-reviews">—</strong></div>
-                <div class="signal-row"><span>Größter beobachteter Bereich</span><strong id="signal-largest">—</strong></div>
-                <div class="signal-row"><span>Median sichtbarer Review-Anzahlen</span><strong id="signal-median-reviews">—</strong></div>
-                <div class="signal-row"><span>Zuletzt beobachtet</span><strong id="signal-last-date">—</strong></div>
+                <div class="signal-row"><span>Bewertungen bei Google, zusammengezählt</span><strong id="signal-reviews">—</strong></div>
+                <div class="signal-row"><span>Höchster angezeigter Bereich</span><strong id="signal-largest">—</strong></div>
+                <div class="signal-row"><span>Median der Bewertungszahlen</span><strong id="signal-median-reviews">—</strong></div>
+                <div class="signal-row"><span>Letzte Erfassung</span><strong id="signal-last-date">—</strong></div>
               </div>
             </article>
           </div>
@@ -189,34 +173,29 @@
         <section class="highlights-section" aria-labelledby="highlights-title">
           <div class="section-heading">
             <div>
-              <span class="section-kicker">Größte Bereiche</span>
-              <h2 id="highlights-title">Profile mit hohen beobachteten Hinweisen</h2>
+              <h2 id="highlights-title">Hohe angezeigte Bereiche</h2>
             </div>
             <p>
-              Sortiert nach der von Google angezeigten Obergrenze. Eine hohe Zahl sagt nichts darüber
-              aus, ob die zugrunde liegenden Beschwerden berechtigt waren.
+              Diese Auswahl ist nach der von Google angezeigten Obergrenze sortiert. Daraus lässt sich
+              nicht ableiten, ob die Beschwerden berechtigt oder unberechtigt waren.
             </p>
           </div>
           <div id="highlight-grid" class="highlight-grid"></div>
         </section>
 
         <section class="explainer">
-          <div>
-            <span class="section-kicker">Wie lesen?</span>
-            <h2>Transparenzsignal, nicht Schuldurteil.</h2>
-          </div>
+          <h2>Was die Zahlen nicht sagen</h2>
           <p>
-            Google veröffentlicht bei manchen Profilen ungefähre Bereiche, zum Beispiel
-            <strong>21–50</strong>. Fehlt ein Hinweis, bedeutet das nur
-            <strong>„in diesem Crawl nicht beobachtet“</strong> und nicht „sicher null entfernte
-            Bewertungen“. Unvollständige Checks werden separat gekennzeichnet.
+            Google nennt ungefähre Bereiche wie <strong>21–50</strong>. Ein fehlender Hinweis bedeutet
+            deshalb nur, dass bei diesem Crawl keiner gesehen wurde. Es bedeutet nicht automatisch,
+            dass in den letzten 365 Tagen keine Bewertung entfernt wurde. Einzelne Rezensionstexte
+            wurden für diese Seite nicht ausgewertet.
           </p>
         </section>
 
         <section class="results-section" id="daten" aria-labelledby="results-title">
           <div class="results-heading">
             <div>
-              <span class="section-kicker">Datensatz</span>
               <h2 id="results-title">Betriebe durchsuchen</h2>
             </div>
             <span class="results-count" id="results-count">0 Ergebnisse</span>
@@ -226,7 +205,7 @@
             <label class="search-box">
               <span class="search-icon" aria-hidden="true">⌕</span>
               <span class="sr-only">Betriebe durchsuchen</span>
-              <input id="search-input" type="search" placeholder="Restaurant, Café, Döner…" autocomplete="off" />
+              <input id="search-input" type="search" placeholder="Name oder Kategorie" autocomplete="off" />
             </label>
 
             <div class="filter-row" role="group" aria-label="Ergebnisse filtern">
@@ -234,14 +213,14 @@
               <button class="filter-chip" type="button" data-filter="notice">Mit Hinweis</button>
               <button class="filter-chip" type="button" data-filter="50">50+</button>
               <button class="filter-chip" type="button" data-filter="100">100+</button>
-              <button class="filter-chip" type="button" data-filter="uncertain">Unvollständig</button>
+              <button class="filter-chip" type="button" data-filter="uncertain">Nicht vollständig</button>
             </div>
 
             <label class="sort-select">
               <span>Sortieren</span>
               <select id="sort-select">
-                <option value="notice-desc">Größter Hinweis</option>
-                <option value="reviews-desc">Meiste sichtbare Reviews</option>
+                <option value="notice-desc">Höchster Bereich</option>
+                <option value="reviews-desc">Meiste Bewertungen</option>
                 <option value="name-asc">Name A–Z</option>
               </select>
             </label>
@@ -251,47 +230,38 @@
           <div id="venue-grid" class="venue-grid" aria-live="polite"></div>
 
           <div id="empty-state" class="empty-state" hidden>
-            <div class="empty-icon" aria-hidden="true">◎</div>
-            <h3>Noch keine öffentlichen Daten</h3>
-            <p>
-              Nach einem Crawl kann der Datensatz mit <code>npm run export-web-data</code> erzeugt und
-              anschließend zusammen mit <code>docs/data/osnabruck.json</code> veröffentlicht werden.
-            </p>
+            <h3>Noch keine Daten veröffentlicht</h3>
+            <p>Nach dem Export erscheint hier der aktuelle Datensatz.</p>
           </div>
         </section>
 
         <section class="methodology" id="methodik">
-          <div class="section-heading split-heading">
+          <div class="section-heading">
             <div>
-              <span class="section-kicker">Methodik</span>
-              <h2>So entsteht der Datensatz.</h2>
+              <h2>Wie wurden die Daten erhoben?</h2>
             </div>
             <p>
-              Das Projekt ist Open Source. Rohdaten werden aus öffentlich sichtbaren Google-Maps-Seiten
-              gewonnen und anschließend dedupliziert und als statischer Datensatz veröffentlicht.
+              Der Crawler und der Quellcode sind öffentlich auf GitHub. Die Seite selbst enthält nur
+              die beim Crawl erfassten Angaben und daraus berechnete Zusammenfassungen.
             </p>
           </div>
 
           <div class="method-grid">
             <article>
-              <span class="method-number">01</span>
-              <h3>Breite Suche</h3>
-              <p>Mehrere Gastro-Suchbegriffe mit unterschiedlich hohen Coverage-Caps liefern Kandidaten für Osnabrück.</p>
+              <strong>1. Suchen</strong>
+              <p>Google Maps wird mit mehreren Gastro-Suchbegriffen für Osnabrück durchsucht.</p>
             </article>
             <article>
-              <span class="method-number">02</span>
-              <h3>Hinweis prüfen</h3>
-              <p>Jedes Profil wird geöffnet und der öffentliche Review-Bereich auf Googles Transparenzhinweis geprüft.</p>
+              <strong>2. Profile prüfen</strong>
+              <p>Bei jedem gefundenen Profil wird der öffentlich sichtbare Bewertungsbereich geöffnet.</p>
             </article>
             <article>
-              <span class="method-number">03</span>
-              <h3>Deduplizieren</h3>
-              <p>Mehrfach gefundene Profile werden zusammengeführt. Positive Beobachtungen werden nicht durch spätere Nulltreffer überschrieben.</p>
+              <strong>3. Dopplungen zusammenführen</strong>
+              <p>Dasselbe Profil kann in mehreren Suchen auftauchen und wird am Ende nur einmal gezählt.</p>
             </article>
             <article>
-              <span class="method-number">04</span>
-              <h3>Neutral veröffentlichen</h3>
-              <p>Gezeigt werden beobachteter Bereich, sichtbare Review-Anzahl, Zeitpunkt und Status ohne Aussage über Motive oder Schuld.</p>
+              <strong>4. Hinweis speichern</strong>
+              <p>Gespeichert wird der von Google angezeigte Bereich, nicht eine Interpretation des Grundes.</p>
             </article>
           </div>
         </section>
@@ -299,8 +269,8 @@
 
       <footer class="site-footer">
         <div>
-          <strong>Review Transparency · Osnabrück</strong>
-          <p>Unabhängige Aufbereitung öffentlich sichtbarer Google-Maps-Informationen.</p>
+          <strong>Google-Bewertungen · Osnabrück</strong>
+          <p>Privates, unabhängiges Datenprojekt.</p>
         </div>
         <p>
           Google Maps ist eine Marke von Google. Dieses Projekt ist nicht mit Google verbunden oder von Google unterstützt.
