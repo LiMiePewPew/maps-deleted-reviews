@@ -25,8 +25,20 @@ describe('progress formatting', () => {
 
   it('formats positive venue rows as aligned terminal output', () => {
     expect(formatVenueProgress(row)).toContain('Venue Rüyam Gemüse Kebab 2');
-    expect(formatVenueProgress(row)).toContain('⎸ 11 to 20 deletions');
+    expect(formatVenueProgress(row)).toContain('⎸ 11 to 20 removed reviews');
     expect(formatVenueProgress(row)).toContain('⎸ 42291 total reviews');
+  });
+
+  it('formats legacy 250/250 observations as the open-ended Google bucket', () => {
+    expect(
+      formatVenueProgress({
+        ...row,
+        deletedReviewsMin: 250,
+        deletedReviewsMax: 250,
+        deletedReviewsEstimate: 250,
+        deletedReviewNotice: 'Über 250 Bewertungen aufgrund von Beschwerden wegen Diffamierung entfernt.',
+      }),
+    ).toContain('⎸ over 250 removed reviews');
   });
 
   it('does not present a missing notice as proven zero deletions', () => {
