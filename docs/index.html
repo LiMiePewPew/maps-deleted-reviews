@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#f7f7f4" />
     <meta
       name="description"
-      content="Öffentlich sichtbare Google-Hinweise zu entfernten Bewertungen bei Betrieben in Osnabrück."
+      content="Öffentlich sichtbare Google-Hinweise zu entfernten Bewertungen bei Google-Maps-Profilen in Osnabrück."
     />
     <title>Google-Hinweise zu entfernten Bewertungen · Osnabrück</title>
     <link rel="stylesheet" href="./styles.css" />
@@ -24,7 +24,7 @@
 
         <nav class="header-nav" aria-label="Hauptnavigation">
           <a href="#analyse">Zahlen</a>
-          <a href="#daten">Betriebe</a>
+          <a href="#daten">Profile</a>
           <a href="#methodik">Wie erhoben?</a>
           <a
             class="github-link"
@@ -42,9 +42,9 @@
               <h1>Hinweise zu entfernten Google-Bewertungen in Osnabrück</h1>
               <p class="hero-lede">
                 Ich bin auf diese Hinweise gestoßen, als ich eigentlich nur nach einem neuen Döner
-                gesucht habe. Google blendet bei manchen Unternehmensprofilen ein, in welchem Bereich
-                Bewertungen nach Beschwerden wegen Diffamierung entfernt wurden. Weil diese Angabe
-                leicht zu übersehen ist, habe ich die öffentlich sichtbaren Hinweise für Osnabrück gesammelt.
+                gesucht habe. Google zeigt bei manchen Unternehmensprofilen einen ungefähren Bereich
+                von Bewertungen an, die nach Beschwerden wegen Diffamierung entfernt wurden. Diese
+                Seite sammelt die Hinweise, die beim Crawl öffentlich sichtbar waren.
               </p>
 
               <div class="hero-meta-row">
@@ -63,43 +63,43 @@
           <div class="hero-disclaimer">
             <strong>Wichtig:</strong>
             <p>
-              Ein solcher Hinweis sagt nicht, dass ein Betrieb Bewertungen unrechtmäßig entfernen ließ.
-              Viele Löschungen können völlig berechtigt sein. Hier wird nur wiedergegeben, was Google
-              zum Zeitpunkt des Crawls öffentlich angezeigt hat.
+              Ein Hinweis ist kein Beleg für Manipulation oder Fehlverhalten. Viele Entfernungen können
+              völlig berechtigt sein. Hier wird nur wiedergegeben, was Google zum Zeitpunkt des Crawls
+              öffentlich angezeigt hat.
             </p>
           </div>
         </section>
 
         <section class="stats" aria-label="Kennzahlen">
           <article class="stat-card">
-            <span class="stat-label">Betriebe im Datensatz</span>
+            <span class="stat-label">Profile im Datensatz</span>
             <strong class="stat-value" id="stat-observed">—</strong>
-            <span class="stat-foot">nach dem Zusammenführen von Dopplungen</span>
+            <span class="stat-foot">nach Deduplizierung und öffentlichen Filtern</span>
           </article>
           <article class="stat-card">
             <span class="stat-label">Mit Google-Hinweis</span>
             <strong class="stat-value" id="stat-notices">—</strong>
-            <span class="stat-foot">Hinweis im Crawl gefunden</span>
+            <span class="stat-foot">Hinweis beim Crawl gefunden</span>
           </article>
           <article class="stat-card">
             <span class="stat-label">Anteil</span>
             <strong class="stat-value" id="stat-share">—</strong>
-            <span class="stat-foot">bezogen auf den erfassten Datensatz</span>
+            <span class="stat-foot">nur bezogen auf diesen Datensatz</span>
           </article>
           <article class="stat-card">
-            <span class="stat-label">Bereich bis mindestens 50</span>
-            <strong class="stat-value" id="stat-50plus">—</strong>
-            <span class="stat-foot">obere Grenze 50 oder höher</span>
+            <span class="stat-label">Mindestens 51</span>
+            <strong class="stat-value" id="stat-51plus">—</strong>
+            <span class="stat-foot">untere Grenze des Google-Bereichs liegt bei 51 oder höher</span>
           </article>
           <article class="stat-card">
-            <span class="stat-label">Bereich bis mindestens 100</span>
-            <strong class="stat-value" id="stat-100plus">—</strong>
-            <span class="stat-foot">obere Grenze 100 oder höher</span>
+            <span class="stat-label">Mindestens 101</span>
+            <strong class="stat-value" id="stat-101plus">—</strong>
+            <span class="stat-foot">untere Grenze des Google-Bereichs liegt bei 101 oder höher</span>
           </article>
           <article class="stat-card">
             <span class="stat-label">Nicht vollständig geprüft</span>
             <strong class="stat-value" id="stat-uncertain">—</strong>
-            <span class="stat-foot">kann später gezielt nachgeprüft werden</span>
+            <span class="stat-foot">diese Profile können gezielt nachgeprüft werden</span>
           </article>
         </section>
 
@@ -109,15 +109,15 @@
               <h2 id="analysis-title">Was ist im Datensatz zu sehen?</h2>
             </div>
             <p>
-              Die Auswertung bezieht sich nur auf den letzten Crawl. Sie sagt nichts darüber aus,
-              warum einzelne Bewertungen entfernt wurden.
+              Die Zahlen beschreiben den veröffentlichten Crawl-Datensatz. Sie sind keine vollständige
+              oder repräsentative Erhebung aller Gastronomiebetriebe in Osnabrück.
             </p>
           </div>
 
           <div class="analysis-grid">
             <article class="panel range-panel">
               <div class="panel-heading">
-                <h3>Verteilung der angezeigten Bereiche</h3>
+                <h3>Verteilung der Google-Bereiche</h3>
                 <span class="panel-meta" id="range-total">— Hinweise</span>
               </div>
               <div id="range-chart" class="bar-chart" aria-label="Verteilung der Hinweisbereiche"></div>
@@ -125,7 +125,7 @@
 
             <article class="panel quality-panel">
               <div class="panel-heading">
-                <h3>Wie vollständig war der Crawl?</h3>
+                <h3>Wie viele gefundene Profile konnten vollständig geprüft werden?</h3>
               </div>
 
               <div class="quality-visual">
@@ -144,83 +144,79 @@
               </div>
             </article>
 
-            <article class="panel category-panel">
+            <article class="panel signal-panel">
               <div class="panel-heading">
-                <h3>Hinweise nach Suchkategorie</h3>
-                <span class="panel-meta">8 Kategorien mit den meisten Treffern</span>
+                <h3>Bereinigung des Datensatzes</h3>
               </div>
-              <div id="category-chart" class="category-chart"></div>
-              <p class="panel-note">
-                Die Kategorien stammen aus den Suchbegriffen des Crawls. Ein Betrieb kann bei Google
-                zu mehreren Suchbegriffen passen; im zusammengeführten Datensatz bleibt eine Kategorie stehen.
-              </p>
+              <div class="signal-list">
+                <div class="signal-row"><span>Profile vor öffentlichen Filtern</span><strong id="signal-candidates">—</strong></div>
+                <div class="signal-row"><span>Offensichtlich außerhalb Osnabrücks</span><strong id="signal-area-excluded">—</strong></div>
+                <div class="signal-row"><span>Offensichtlich keine Gastronomie</span><strong id="signal-nongastro-excluded">—</strong></div>
+                <div class="signal-row"><span>Letzte Profilprüfung</span><strong id="signal-last-date">—</strong></div>
+              </div>
             </article>
 
             <article class="panel signal-panel">
               <div class="panel-heading">
-                <h3>Weitere Zahlen</h3>
+                <h3>Was zählt Google in diesem Hinweis?</h3>
               </div>
-              <div class="signal-list">
-                <div class="signal-row"><span>Bewertungen bei Google, zusammengezählt</span><strong id="signal-reviews">—</strong></div>
-                <div class="signal-row"><span>Höchster angezeigter Bereich</span><strong id="signal-largest">—</strong></div>
-                <div class="signal-row"><span>Median der Bewertungszahlen</span><strong id="signal-median-reviews">—</strong></div>
-                <div class="signal-row"><span>Letzte Erfassung</span><strong id="signal-last-date">—</strong></div>
-              </div>
+              <p class="panel-note">
+                Laut Google werden hier Bereiche für Bewertungen angezeigt, die nach Beschwerden wegen
+                Diffamierung entfernt wurden, deren Entfernung in den letzten 365 Tagen verarbeitet wurde
+                und die nicht später wiederhergestellt wurden. Andere Gründe für entfernte Bewertungen
+                werden durch diesen Hinweis nicht vollständig abgebildet.
+              </p>
+              <p class="panel-note">
+                <a
+                  class="github-link"
+                  href="https://support.google.com/contributionpolicy/answer/16997273?hl=de"
+                  target="_blank"
+                  rel="noreferrer"
+                >Google-Hilfeseite zur Transparenzanzeige ↗</a>
+              </p>
             </article>
           </div>
-        </section>
-
-        <section class="highlights-section" aria-labelledby="highlights-title">
-          <div class="section-heading">
-            <div>
-              <h2 id="highlights-title">Hohe angezeigte Bereiche</h2>
-            </div>
-            <p>
-              Diese Auswahl ist nach der von Google angezeigten Obergrenze sortiert. Daraus lässt sich
-              nicht ableiten, ob die Beschwerden berechtigt oder unberechtigt waren.
-            </p>
-          </div>
-          <div id="highlight-grid" class="highlight-grid"></div>
         </section>
 
         <section class="explainer">
           <h2>Was die Zahlen nicht sagen</h2>
           <p>
-            Google nennt ungefähre Bereiche wie <strong>21–50</strong>. Ein fehlender Hinweis bedeutet
-            deshalb nur, dass bei diesem Crawl keiner gesehen wurde. Es bedeutet nicht automatisch,
-            dass in den letzten 365 Tagen keine Bewertung entfernt wurde. Einzelne Rezensionstexte
-            wurden für diese Seite nicht ausgewertet.
+            Google nennt ungefähre Bereiche wie <strong>21–50</strong> oder <strong>Über 250</strong>.
+            Ein fehlender Hinweis bedeutet deshalb nur, dass bei diesem Crawl keiner gesehen wurde. Er
+            beweist nicht, dass in den letzten 365 Tagen keine Bewertung entfernt wurde. Die Google-Suche
+            ist außerdem gerankt und liefert kein garantiert vollständiges Verzeichnis aller Betriebe.
+            Einzelne Rezensionstexte wurden für diese Seite nicht ausgewertet.
           </p>
         </section>
 
         <section class="results-section" id="daten" aria-labelledby="results-title">
           <div class="results-heading">
             <div>
-              <h2 id="results-title">Betriebe durchsuchen</h2>
+              <h2 id="results-title">Profile durchsuchen</h2>
             </div>
-            <span class="results-count" id="results-count">0 Ergebnisse</span>
+            <span class="results-count" id="results-count">0 Treffer</span>
           </div>
 
           <div class="toolbar">
             <label class="search-box">
               <span class="search-icon" aria-hidden="true">⌕</span>
-              <span class="sr-only">Betriebe durchsuchen</span>
-              <input id="search-input" type="search" placeholder="Name oder Kategorie" autocomplete="off" />
+              <span class="sr-only">Profile durchsuchen</span>
+              <input id="search-input" type="search" placeholder="Name, Adresse oder Suchbegriff" autocomplete="off" />
             </label>
 
             <div class="filter-row" role="group" aria-label="Ergebnisse filtern">
-              <button class="filter-chip is-active" type="button" data-filter="all">Alle</button>
-              <button class="filter-chip" type="button" data-filter="notice">Mit Hinweis</button>
-              <button class="filter-chip" type="button" data-filter="50">50+</button>
-              <button class="filter-chip" type="button" data-filter="100">100+</button>
-              <button class="filter-chip" type="button" data-filter="uncertain">Nicht vollständig</button>
+              <button class="filter-chip is-active" type="button" data-filter="all" aria-pressed="true">Alle</button>
+              <button class="filter-chip" type="button" data-filter="notice" aria-pressed="false">Mit Hinweis</button>
+              <button class="filter-chip" type="button" data-filter="51" aria-pressed="false">≥51</button>
+              <button class="filter-chip" type="button" data-filter="101" aria-pressed="false">≥101</button>
+              <button class="filter-chip" type="button" data-filter="uncertain" aria-pressed="false">Nicht vollständig</button>
             </div>
 
             <label class="sort-select">
               <span>Sortieren</span>
               <select id="sort-select">
                 <option value="notice-desc">Höchster Bereich</option>
-                <option value="reviews-desc">Meiste Bewertungen</option>
+                <option value="reviews-desc">Meiste sichtbare Bewertungen</option>
                 <option value="name-asc">Name A–Z</option>
               </select>
             </label>
@@ -228,6 +224,9 @@
 
           <div id="data-message" class="data-message" hidden></div>
           <div id="venue-grid" class="venue-grid" aria-live="polite"></div>
+          <div class="load-more-row">
+            <button id="load-more" class="load-more" type="button" hidden>Weitere anzeigen</button>
+          </div>
 
           <div id="empty-state" class="empty-state" hidden>
             <h3>Noch keine Daten veröffentlicht</h3>
@@ -241,29 +240,28 @@
               <h2>Wie wurden die Daten erhoben?</h2>
             </div>
             <p>
-              Der Crawler und der Quellcode sind öffentlich auf GitHub. Google liefert bei einer lokalen
-              Suche gelegentlich auch Treffer außerhalb Osnabrücks. Offensichtliche Fremdtreffer werden
-              deshalb beim Export anhand vorhandener Ortsangaben oder Koordinaten aussortiert. Unklare
-              Fälle bleiben im Datensatz, statt sie auf Verdacht zu löschen.
+              Der Crawler und der Quellcode sind öffentlich auf GitHub. Der Rohcrawl bleibt erhalten;
+              für die öffentliche Seite werden offensichtliche Fremdtreffer und klar nicht gastronomische
+              Profile konservativ herausgefiltert. Unklare Fälle werden nicht auf Verdacht gelöscht.
             </p>
           </div>
 
           <div class="method-grid">
             <article>
               <strong>1. Suchen</strong>
-              <p>Google Maps wird mit mehreren Gastro-Suchbegriffen für Osnabrück durchsucht.</p>
+              <p>Google Maps wird mit mehreren Gastro-Suchbegriffen für Osnabrück durchsucht. Die Trefferliste ist gerankt und kein vollständiges Branchenverzeichnis.</p>
             </article>
             <article>
               <strong>2. Profile prüfen</strong>
-              <p>Bei jedem gefundenen Profil wird der öffentlich sichtbare Bewertungsbereich geöffnet.</p>
+              <p>Bei jedem gefundenen Profil wird der Bewertungsbereich geöffnet und auf den öffentlich sichtbaren Transparenzhinweis geprüft.</p>
             </article>
             <article>
-              <strong>3. Dopplungen zusammenführen</strong>
-              <p>Dasselbe Profil kann in mehreren Suchen auftauchen und wird am Ende nur einmal gezählt.</p>
+              <strong>3. Zusammenführen und filtern</strong>
+              <p>Doppelte Google-Maps-Profile werden zusammengeführt. Offensichtliche Orts- und Nicht-Gastro-Treffer werden beim Webexport separat gezählt und entfernt.</p>
             </article>
             <article>
-              <strong>4. Hinweis speichern</strong>
-              <p>Gespeichert wird der von Google angezeigte Bereich, nicht eine Interpretation des Grundes.</p>
+              <strong>4. Beobachtung speichern</strong>
+              <p>Gespeichert wird der von Google angezeigte Bereich und der Zeitpunkt der Prüfung. Ein Suchbegriff ist dabei keine verlässliche Unternehmenskategorie.</p>
             </article>
           </div>
         </section>
