@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f7f4" />
+    <meta
+      name="description"
+      content="Public Google notices about removed reviews on Google Maps profiles in Osnabrück, Germany."
+    />
+    <title>Google notices about removed reviews · Osnabrück</title>
+    <link rel="canonical" href="https://limiepewpew.github.io/maps-deleted-reviews/en/" />
+    <link rel="alternate" hreflang="de" href="https://limiepewpew.github.io/maps-deleted-reviews/" />
+    <link rel="alternate" hreflang="en" href="https://limiepewpew.github.io/maps-deleted-reviews/en/" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <a class="brand" href="./" aria-label="Home">
+          <span class="brand-mark" aria-hidden="true">OS</span>
+          <span>
+            <strong>Google Reviews</strong>
+            <small>Osnabrück</small>
+          </span>
+        </a>
+
+        <nav class="header-nav" aria-label="Main navigation">
+          <a href="#analysis">Figures</a>
+          <a href="#data">Profiles</a>
+          <a href="#methodology">Methodology</a>
+          <a class="language-link" href="../" lang="de" hreflang="de">DE</a>
+          <a
+            class="github-link"
+            href="https://github.com/LiMiePewPew/maps-deleted-reviews"
+            target="_blank"
+            rel="noreferrer"
+          >GitHub ↗</a>
+        </nav>
+      </header>
+
+      <main>
+        <section class="hero">
+          <div class="hero-grid">
+            <div class="hero-copy">
+              <h1>Google notices about removed reviews in Osnabrück</h1>
+              <p class="hero-lede">
+                I came across these notices while I was actually just looking for a new döner place.
+                On some business profiles, Google displays an approximate range of reviews that were
+                removed following complaints regarding defamation. This page collects the notices that
+                were publicly visible when the profiles were checked.
+              </p>
+
+              <div class="hero-meta-row">
+                <span id="last-updated">No dataset published yet</span>
+                <a href="#methodology">How the data was collected</a>
+              </div>
+            </div>
+
+            <aside class="hero-insight" aria-label="Dataset status">
+              <h2>Latest crawl</h2>
+              <strong id="snapshot-headline">Loading data…</strong>
+              <p id="snapshot-copy">The figures are calculated from the published dataset.</p>
+            </aside>
+          </div>
+
+          <div class="hero-disclaimer">
+            <strong>Important:</strong>
+            <p>
+              A notice is not evidence of manipulation or wrongdoing. Many removals may be entirely
+              justified. This page only reports what Google publicly displayed at the time of the crawl.
+            </p>
+          </div>
+        </section>
+
+        <section class="stats" aria-label="Key figures">
+          <article class="stat-card">
+            <span class="stat-label">Profiles in the dataset</span>
+            <strong class="stat-value" id="stat-observed">—</strong>
+            <span class="stat-foot">after deduplication and public-data filters</span>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">With a Google notice</span>
+            <strong class="stat-value" id="stat-notices">—</strong>
+            <span class="stat-foot">notice observed during the crawl</span>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Share</span>
+            <strong class="stat-value" id="stat-share">—</strong>
+            <span class="stat-foot">only within this dataset</span>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">At least 51</span>
+            <strong class="stat-value" id="stat-51plus">—</strong>
+            <span class="stat-foot">the lower bound of Google's range is 51 or higher</span>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">At least 101</span>
+            <strong class="stat-value" id="stat-101plus">—</strong>
+            <span class="stat-foot">the lower bound of Google's range is 101 or higher</span>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Not fully checked</span>
+            <strong class="stat-value" id="stat-uncertain">—</strong>
+            <span class="stat-foot">these profiles can be rechecked separately</span>
+          </article>
+        </section>
+
+        <section class="analysis-section" id="analysis" aria-labelledby="analysis-title">
+          <div class="section-heading">
+            <div>
+              <h2 id="analysis-title">What does the dataset show?</h2>
+            </div>
+            <p>
+              These figures describe the published crawl dataset. They are not a complete or
+              representative survey of every food and drink business in Osnabrück.
+            </p>
+          </div>
+
+          <div class="analysis-grid">
+            <article class="panel range-panel">
+              <div class="panel-heading">
+                <h3>Distribution of Google's displayed ranges</h3>
+                <span class="panel-meta" id="range-total">— notices</span>
+              </div>
+              <div id="range-chart" class="bar-chart" aria-label="Distribution of notice ranges"></div>
+            </article>
+
+            <article class="panel quality-panel">
+              <div class="panel-heading">
+                <h3>How many discovered profiles were fully checked?</h3>
+              </div>
+
+              <div class="quality-visual">
+                <div class="quality-ring" id="quality-ring" aria-hidden="true">
+                  <div class="quality-ring-inner">
+                    <strong id="quality-value">—</strong>
+                    <span>fully checked</span>
+                  </div>
+                </div>
+
+                <div class="quality-legend">
+                  <div><span class="legend-dot notice-dot"></span><span>Notice observed</span><strong id="quality-notice">—</strong></div>
+                  <div><span class="legend-dot observed-dot"></span><span>No notice observed</span><strong id="quality-clean">—</strong></div>
+                  <div><span class="legend-dot uncertain-dot"></span><span>Incomplete check</span><strong id="quality-uncertain">—</strong></div>
+                </div>
+              </div>
+            </article>
+
+            <article class="panel signal-panel">
+              <div class="panel-heading">
+                <h3>Dataset filtering</h3>
+              </div>
+              <div class="signal-list">
+                <div class="signal-row"><span>Profiles before public filters</span><strong id="signal-candidates">—</strong></div>
+                <div class="signal-row"><span>Clearly outside Osnabrück</span><strong id="signal-area-excluded">—</strong></div>
+                <div class="signal-row"><span>Clearly not food or drink businesses</span><strong id="signal-nongastro-excluded">—</strong></div>
+                <div class="signal-row"><span>Latest profile check</span><strong id="signal-last-date">—</strong></div>
+              </div>
+            </article>
+
+            <article class="panel signal-panel">
+              <div class="panel-heading">
+                <h3>What does Google count in this notice?</h3>
+              </div>
+              <p class="panel-note">
+                According to Google, these ranges cover reviews removed following complaints regarding
+                defamation when the removal was processed within the last 365 days and was not later
+                reversed. Reviews removed for other reasons are not fully represented by this notice.
+              </p>
+              <p class="panel-note">
+                <a
+                  class="github-link"
+                  href="https://support.google.com/contributionpolicy/answer/16997273?hl=en"
+                  target="_blank"
+                  rel="noreferrer"
+                >Google's help page about the transparency notice ↗</a>
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section class="explainer">
+          <h2>What the numbers do not tell you</h2>
+          <p>
+            Google uses approximate ranges such as <strong>21–50</strong> or <strong>Over 250</strong>.
+            If no notice was observed, that only means none was seen during this crawl. It does not prove
+            that no review was removed during the last 365 days. Google Maps search results are also ranked
+            and do not provide a guaranteed complete directory of all businesses. Individual review texts
+            were not analysed for this project.
+          </p>
+        </section>
+
+        <section class="results-section" id="data" aria-labelledby="results-title">
+          <div class="results-heading">
+            <div>
+              <h2 id="results-title">Search profiles</h2>
+            </div>
+            <span class="results-count" id="results-count">0 results</span>
+          </div>
+
+          <div class="toolbar">
+            <label class="search-box">
+              <span class="search-icon" aria-hidden="true">⌕</span>
+              <span class="sr-only">Search profiles</span>
+              <input id="search-input" type="search" placeholder="Name, address or search term" autocomplete="off" />
+            </label>
+
+            <div class="filter-row" role="group" aria-label="Filter results">
+              <button class="filter-chip is-active" type="button" data-filter="all" aria-pressed="true">All</button>
+              <button class="filter-chip" type="button" data-filter="notice" aria-pressed="false">With notice</button>
+              <button class="filter-chip" type="button" data-filter="51" aria-pressed="false">≥51</button>
+              <button class="filter-chip" type="button" data-filter="101" aria-pressed="false">≥101</button>
+              <button class="filter-chip" type="button" data-filter="uncertain" aria-pressed="false">Incomplete</button>
+            </div>
+
+            <label class="sort-select">
+              <span>Sort</span>
+              <select id="sort-select">
+                <option value="notice-desc">Highest range</option>
+                <option value="reviews-desc">Most visible reviews</option>
+                <option value="name-asc">Name A–Z</option>
+              </select>
+            </label>
+          </div>
+
+          <div id="data-message" class="data-message" hidden></div>
+          <div id="venue-grid" class="venue-grid" aria-live="polite"></div>
+          <div class="load-more-row">
+            <button id="load-more" class="load-more" type="button" hidden>Show more</button>
+          </div>
+
+          <div id="empty-state" class="empty-state" hidden>
+            <h3>No data published yet</h3>
+            <p>The current dataset will appear here after the next export.</p>
+          </div>
+        </section>
+
+        <section class="methodology" id="methodology">
+          <div class="section-heading">
+            <div>
+              <h2>How was the data collected?</h2>
+            </div>
+            <p>
+              The crawler and source code are public on GitHub. The raw crawl is preserved. For the
+              public page, obvious out-of-area results and profiles that are clearly unrelated to food
+              and drink are conservatively filtered out. Ambiguous cases are not removed on a guess.
+            </p>
+          </div>
+
+          <div class="method-grid">
+            <article>
+              <strong>1. Search</strong>
+              <p>Google Maps is searched using several food and drink related search terms for Osnabrück. The result list is ranked and is not a complete business directory.</p>
+            </article>
+            <article>
+              <strong>2. Check profiles</strong>
+              <p>For each discovered profile, the reviews section is opened and checked for the publicly visible transparency notice.</p>
+            </article>
+            <article>
+              <strong>3. Merge and filter</strong>
+              <p>Duplicate Google Maps profiles are merged. Obvious location and non-food results are counted separately and removed during the web export.</p>
+            </article>
+            <article>
+              <strong>4. Store the observation</strong>
+              <p>The range displayed by Google and the time of the check are stored. A discovery search term is not treated as a reliable business category.</p>
+            </article>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <div>
+          <strong>Google Reviews · Osnabrück</strong>
+          <p>Private, independent data project.</p>
+        </div>
+        <p>
+          Google Maps is a trademark of Google. This project is not affiliated with or endorsed by Google.
+        </p>
+      </footer>
+    </div>
+
+    <dialog id="venue-dialog" class="venue-dialog">
+      <div class="dialog-shell">
+        <button class="dialog-close" id="dialog-close" type="button" aria-label="Close details">×</button>
+        <div id="dialog-content"></div>
+      </div>
+    </dialog>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
