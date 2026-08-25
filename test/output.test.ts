@@ -75,4 +75,32 @@ describe('writeCsv', () => {
     const [, ...lines] = (await readFile(outputPath, 'utf8')).trim().split('\n');
     expect(lines.map((line) => line.split(',')[1])).toEqual(['Alpha', 'Beta', 'Charlie']);
   });
+
+  it('keeps multiline Playwright errors on one physical CSV line for resume safety', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'maps-csv-'));
+    const outputPath = join(tempDir, 'results.csv');
+
+    await writeCsv(outputPath, [
+      {
+        venueType: 'Cafe',
+        name: 'Example Cafe',
+        url: 'https://www.google.de/maps/place/example',
+        totalReviews: null,
+        deletedReviewsMin: 0,
+        deletedReviewsMax: 0,
+        deletedReviewsEstimate: 0,
+        currentStarRating: null,
+        percentageDeleted: null,
+        realScoreIfDeletedAreOneStar: null,
+        deletedReviewNotice: null,
+        scrapedAt: '2026-08-25T08:00:00.000Z',
+        status: 'failed',
+        error: "page.goto: Timeout exceeded.\nCall log:\n  - waiting for locator('body')",
+      },
+    ]);
+
+    const raw = await readFile(outputPath, 'utf8');
+    expect(raw.trim().split('\n')).toHaveLength(2);
+    expect(raw).toContain("page.goto: Timeout exceeded. Call log:   - waiting for locator('body')");
+  });
 });
