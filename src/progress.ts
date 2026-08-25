@@ -16,12 +16,19 @@ export function formatVenueProgress(row: ScrapedVenue): string {
 
 function formatNoticeStatus(row: ScrapedVenue): string {
   if (row.deletedReviewNotice && row.deletedReviewsMax > 0) {
-    return `${row.deletedReviewsMin} to ${row.deletedReviewsMax} deletions`;
+    if (isOver250Notice(row.deletedReviewNotice, row.deletedReviewsMin, row.deletedReviewsMax)) {
+      return 'over 250 removed reviews';
+    }
+    return `${row.deletedReviewsMin} to ${row.deletedReviewsMax} removed reviews`;
   }
   if (row.status === 'partial' || row.status === 'failed') {
     return 'notice check incomplete';
   }
   return 'no notice observed';
+}
+
+function isOver250Notice(rawNotice: string, min: number, max: number): boolean {
+  return /(?:über|ueber)\s+250/i.test(rawNotice) || (min === 250 && max === 250);
 }
 
 function formatTotalReviews(totalReviews: number | null): string {
