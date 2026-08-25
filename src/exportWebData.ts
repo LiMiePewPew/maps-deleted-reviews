@@ -10,7 +10,6 @@ interface WebVenue {
   deletedReviewsMin: number;
   deletedReviewsMax: number;
   percentageDeleted: number | null;
-  currentStarRating: number | null;
   reviewNotice: string | null;
   url: string;
   address: string;
@@ -148,7 +147,6 @@ function toWebVenue(record: Record<string, string>): WebVenue {
     deletedReviewsMin,
     deletedReviewsMax,
     percentageDeleted: nullableNumber(record.percentage_deleted),
-    currentStarRating: nullableNumber(record.current_star_rating),
     reviewNotice,
     url: record.url?.trim() ?? '',
     address: record.address?.trim() ?? '',
