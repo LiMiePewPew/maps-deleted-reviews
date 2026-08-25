@@ -3,6 +3,7 @@ import {
   detectBlockerKind,
   detectBlockerText,
   shouldCacheBatchVenue,
+  shouldRefetchScrapedRow,
   shouldStartFreshRun,
 } from '../src/mapsScraper.js';
 import type { ScrapedVenue, ScraperState } from '../src/types.js';
@@ -111,5 +112,23 @@ describe('shouldCacheBatchVenue', () => {
           '21 bis 50 Bewertungen aufgrund von Beschwerden wegen Diffamierung entfernt.',
       }),
     ).toBe(false);
+  });
+});
+
+describe('shouldRefetchScrapedRow', () => {
+  it('does not refetch a complete notice check only because rating extraction is invalid', () => {
+    expect(
+      shouldRefetchScrapedRow({
+        ...rows[0]!,
+        currentStarRating: 6,
+      }),
+    ).toBe(false);
+  });
+
+  it('still refetches partial, failed, missing-review-count, and zero-review rows', () => {
+    expect(shouldRefetchScrapedRow({ ...rows[0]!, status: 'partial' })).toBe(true);
+    expect(shouldRefetchScrapedRow({ ...rows[0]!, status: 'failed' })).toBe(true);
+    expect(shouldRefetchScrapedRow({ ...rows[0]!, totalReviews: null })).toBe(true);
+    expect(shouldRefetchScrapedRow({ ...rows[0]!, totalReviews: 0 })).toBe(true);
   });
 });
