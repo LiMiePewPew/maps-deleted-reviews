@@ -107,7 +107,6 @@ function normalizeVenue(venue) {
     deletedReviewsMin: nullableNumber(venue.deletedReviewsMin) ?? 0,
     deletedReviewsMax: nullableNumber(venue.deletedReviewsMax) ?? 0,
     percentageDeleted: nullableNumber(venue.percentageDeleted),
-    currentStarRating: nullableNumber(venue.currentStarRating),
     reviewNotice: venue.reviewNotice || null,
     url: venue.url || '',
     address: venue.address || '',
@@ -273,7 +272,7 @@ function renderCategoryStats(venues) {
 
 function renderSignals(venues) {
   const notices = venues.filter((venue) => venue.hasNotice);
-  const visibleReviews = venues.reduce((sum, venue) => sum + (venue.totalReviews ?? 0), 0);
+  const visibleReviewCounts = venues.reduce((sum, venue) => sum + (venue.totalReviews ?? 0), 0);
   const reviewCounts = venues
     .map((venue) => venue.totalReviews)
     .filter((value) => Number.isFinite(value))
@@ -286,7 +285,7 @@ function renderSignals(venues) {
     .map((venue) => Date.parse(venue.scrapedAt || ''))
     .filter((value) => Number.isFinite(value));
 
-  elements.signalReviews.textContent = formatCompactNumber(visibleReviews);
+  elements.signalReviews.textContent = formatCompactNumber(visibleReviewCounts);
   elements.signalLargest.textContent = largestVenue ? formatNoticeRange(largestVenue) : '—';
   elements.signalMedianReviews.textContent = medianReviews === null ? '—' : formatNumber(Math.round(medianReviews));
   elements.signalLastDate.textContent = timestamps.length
@@ -389,9 +388,6 @@ function getVisibleVenues() {
     if (state.sort === 'reviews-desc') {
       return (right.totalReviews ?? -1) - (left.totalReviews ?? -1) || compareNames(left, right);
     }
-    if (state.sort === 'rating-desc') {
-      return (right.currentStarRating ?? -1) - (left.currentStarRating ?? -1) || compareNames(left, right);
-    }
     if (state.sort === 'name-asc') return compareNames(left, right);
 
     return (
@@ -423,12 +419,12 @@ function renderVenueCard(venue, index) {
 
       <div class="card-metrics">
         <span class="metric">
-          <strong>${venue.currentStarRating !== null ? `${formatDecimal(venue.currentStarRating)} ★` : '—'}</strong>
-          <span>Google Rating</span>
+          <strong>${venue.totalReviews !== null ? formatNumber(venue.totalReviews) : '—'}</strong>
+          <span>sichtbare Review-Anzahl</span>
         </span>
         <span class="metric">
-          <strong>${venue.totalReviews !== null ? formatNumber(venue.totalReviews) : '—'}</strong>
-          <span>sichtbare Reviews</span>
+          <strong>${venue.scrapedAt ? formatDate(venue.scrapedAt) : '—'}</strong>
+          <span>beobachtet</span>
         </span>
       </div>
 
@@ -460,14 +456,15 @@ function openDetails(venue) {
     </div>
 
     <div class="dialog-grid">
-      <div class="dialog-metric"><span>Sichtbare Reviews</span><strong>${venue.totalReviews !== null ? formatNumber(venue.totalReviews) : 'Nicht verfügbar'}</strong></div>
-      <div class="dialog-metric"><span>Google Rating</span><strong>${venue.currentStarRating !== null ? `${formatDecimal(venue.currentStarRating)} ★` : 'Nicht verfügbar'}</strong></div>
+      <div class="dialog-metric"><span>Sichtbare Review-Anzahl</span><strong>${venue.totalReviews !== null ? formatNumber(venue.totalReviews) : 'Nicht verfügbar'}</strong></div>
+      <div class="dialog-metric"><span>Check-Status</span><strong>${escapeHtml(status.label)}</strong></div>
       <div class="dialog-metric"><span>Rechnerischer Anteil</span><strong>${percentage !== null ? `${formatPercentValue(percentage)}*` : '—'}</strong></div>
       <div class="dialog-metric"><span>Beobachtet</span><strong>${venue.scrapedAt ? formatDate(venue.scrapedAt) : 'Unbekannt'}</strong></div>
     </div>
 
     <p class="dialog-explanation">
-      * Der rechnerische Anteil basiert auf dem Mittelpunkt des von Google angegebenen Bereichs und ist nur eine Näherung.
+      * Der rechnerische Anteil basiert auf dem Mittelpunkt des von Google angegebenen Bereichs und der sichtbaren Review-Anzahl und ist nur eine Näherung.
+      Es wurden keine einzelnen Rezensionstexte für diese Darstellung ausgewertet.
       Ein Transparenzhinweis beweist weder Fehlverhalten des Betriebs noch, dass die entfernten Bewertungen unberechtigt waren.
       Ein fehlender Hinweis bedeutet lediglich, dass während dieses Crawls keiner beobachtet wurde.
     </p>
@@ -561,10 +558,6 @@ function formatNumber(value) {
 function formatCompactNumber(value) {
   if (value < 10_000) return formatNumber(value);
   return new Intl.NumberFormat('de-DE', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
-}
-
-function formatDecimal(value) {
-  return new Intl.NumberFormat('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value);
 }
 
 function formatPercentValue(value) {
