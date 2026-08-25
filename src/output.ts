@@ -61,8 +61,11 @@ function formatCsvCell(value: string | number | null): string {
     return '';
   }
 
-  const text = String(value);
-  if (/[",\n\r]/.test(text)) {
+  // Resume currently reads one physical line per CSV record. Playwright errors can
+  // contain multiline call logs, so keep persisted cells single-line to prevent
+  // those log fragments from becoming fake venues on the next run.
+  const text = String(value).replace(/\r\n|\r|\n/g, ' ');
+  if (/[",]/.test(text)) {
     return `"${text.replace(/"/g, '""')}"`;
   }
 
