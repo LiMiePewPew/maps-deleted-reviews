@@ -65,6 +65,12 @@ const CLEARLY_NON_GASTRO_NAME_PATTERN =
   /\b(?:thai[- ]?massage|massage|nagelstudio|nails?|lashes?|tattoo|piercing|sprachschule|parkplatz|bahnhof|eventagentur|mädchenzentrum|fitnessstudio|fahrschule)\b|design\s+in\s+stein/i;
 const CLEARLY_NON_GASTRO_CATEGORY_PATTERN =
   /\b(?:massage|massage spa|nail salon|beautician|eyelash salon|tattoo|piercing|parking|railway|train station|language school|beauty salon|fitness center|driving school)\b/i;
+const CLEARLY_LODGING_NAME_PATTERN =
+  /\b(?:hotel|pension|boardinghouse|hostel|jugendherberge|monteurzimmer|ferienwohnung|ferienhaus|apartment|appartement|campingplatz|campground|limehome|stayery)\b/i;
+const CLEARLY_LODGING_CATEGORY_PATTERN =
+  /\b(?:hotel|hostel|lodging|guest house|bed\s*(?:&|and)\s*breakfast|campground|camping|holiday apartment|serviced apartment)\b/i;
+const GASTRO_SIGNAL_PATTERN =
+  /\b(?:restaurant|cafe|café|bar|bistro|gasthaus|gaststätte|brauerei|weinbar|grill|küche|kitchen|frühstück|breakfast|eventrooms?)\b/i;
 const CLEARLY_NON_GASTRO_EXACT_NAMES = new Set(
   [
     'MariJing Thai Massage & Asia Wellness',
@@ -159,9 +165,20 @@ export function isClearlyNonGastroProfile(
     return true;
   }
 
-  return Boolean(
-    venue.googleCategory && CLEARLY_NON_GASTRO_CATEGORY_PATTERN.test(venue.googleCategory),
-  );
+  if (venue.googleCategory && CLEARLY_NON_GASTRO_CATEGORY_PATTERN.test(venue.googleCategory)) {
+    return true;
+  }
+
+  const classificationText = `${venue.name} ${venue.googleCategory ?? ''}`;
+  const looksLikeLodging =
+    CLEARLY_LODGING_NAME_PATTERN.test(venue.name) ||
+    Boolean(
+      venue.googleCategory && CLEARLY_LODGING_CATEGORY_PATTERN.test(venue.googleCategory),
+    );
+
+  // Keep mixed hospitality profiles such as "Hotel-Restaurant" or "Hotel ... Cafe".
+  // Only obvious lodging-only profiles are removed from the public gastro dataset.
+  return looksLikeLodging && !GASTRO_SIGNAL_PATTERN.test(classificationText);
 }
 
 export function parseGoogleMapsCoordinates(url: string): { lat: number; lon: number } | null {
