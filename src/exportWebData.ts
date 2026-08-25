@@ -34,6 +34,7 @@ interface WebDataset {
     visibleReviews: number;
     largestNoticeMax: number;
     lastScrapedAt: string | null;
+    excludedOutsideArea: number;
   };
   venues: WebVenue[];
 }
@@ -42,9 +43,27 @@ const DEFAULT_SOURCE = 'output/deleted-reviews-osnabruck-gastro-all.csv';
 const DEFAULT_OUTPUT = 'docs/data/osnabruck.json';
 const DEFAULT_CITY = 'Osnabrück';
 
+const OSNABRUECK_CENTER = { lat: 52.27, lon: 8.05 };
+const OSNABRUECK_MAX_DISTANCE_KM = 12.5;
+const OSNABRUECK_POSTCODES = new Set([
+  '49074',
+  '49076',
+  '49078',
+  '49080',
+  '49082',
+  '49084',
+  '49086',
+  '49088',
+  '49090',
+]);
+const NEARBY_MUNICIPALITY_PATTERN =
+  /\b(?:belm|bissendorf|georgsmarienh(?:ü|u)tte|hasbergen|lotte|wallenhorst|bramsche|hagen\s+(?:am|a\.)\s+teutoburger\s+wald)\b/i;
+
 export function buildWebDataset(rawCsv: string, city = DEFAULT_CITY, sourceCsv = DEFAULT_SOURCE): WebDataset {
   const records = parseCsv(rawCsv);
-  const venues = records.map(toWebVenue).filter((venue) => venue.name.length > 0);
+  const candidates = records.map(toWebVenue).filter((venue) => venue.name.length > 0);
+  const venues = candidates.filter((venue) => !isClearlyOutsideTargetArea(venue, city));
+  const excludedOutsideArea = candidates.length - venues.length;
   const notices = venues.filter((venue) => venue.hasNotice);
   const timestamps = venues
     .map((venue) => Date.parse(venue.scrapedAt ?? ''))
@@ -65,6 +84,7 @@ export function buildWebDataset(rawCsv: string, city = DEFAULT_CITY, sourceCsv =
       visibleReviews: venues.reduce((sum, venue) => sum + (venue.totalReviews ?? 0), 0),
       largestNoticeMax: Math.max(0, ...notices.map((venue) => venue.deletedReviewsMax)),
       lastScrapedAt: timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : null,
+      excludedOutsideArea,
     },
     venues: [...venues].sort(
       (left, right) =>
@@ -73,6 +93,52 @@ export function buildWebDataset(rawCsv: string, city = DEFAULT_CITY, sourceCsv =
         left.name.localeCompare(right.name, 'de', { sensitivity: 'base' }),
     ),
   };
+}
+
+export function isClearlyOutsideTargetArea(venue: Pick<WebVenue, 'name' | 'address' | 'url'>, city = DEFAULT_CITY): boolean {
+  if (normalizeCity(city) !== 'osnabruck') {
+    return false;
+  }
+
+  const nameAndAddress = `${venue.name} ${venue.address}`;
+  if (NEARBY_MUNICIPALITY_PATTERN.test(nameAndAddress)) {
+    return true;
+  }
+
+  const postcode = venue.address.match(/\b\d{5}\b/)?.[0];
+  if (postcode) {
+    return !OSNABRUECK_POSTCODES.has(postcode);
+  }
+
+  if (/\bosnabr(?:ü|u)ck\b/i.test(venue.address)) {
+    return false;
+  }
+
+  const coordinates = parseGoogleMapsCoordinates(venue.url);
+  if (!coordinates) {
+    return false;
+  }
+
+  return haversineDistanceKm(OSNABRUECK_CENTER, coordinates) > OSNABRUECK_MAX_DISTANCE_KM;
+}
+
+export function parseGoogleMapsCoordinates(url: string): { lat: number; lon: number } | null {
+  if (!url) {
+    return null;
+  }
+
+  const decoded = decodeURIComponent(url);
+  const atMatch = decoded.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:,|\/|$)/);
+  if (atMatch) {
+    return { lat: Number(atMatch[1]), lon: Number(atMatch[2]) };
+  }
+
+  const dataMatch = decoded.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+  if (dataMatch) {
+    return { lat: Number(dataMatch[1]), lon: Number(dataMatch[2]) };
+  }
+
+  return null;
 }
 
 export function parseCsv(raw: string): Array<Record<string, string>> {
@@ -157,6 +223,30 @@ function toWebVenue(record: Record<string, string>): WebVenue {
   };
 }
 
+function normalizeCity(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');
+}
+
+function haversineDistanceKm(
+  left: { lat: number; lon: number },
+  right: { lat: number; lon: number },
+): number {
+  const radians = (degrees: number) => (degrees * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const deltaLat = radians(right.lat - left.lat);
+  const deltaLon = radians(right.lon - left.lon);
+  const leftLat = radians(left.lat);
+  const rightLat = radians(right.lat);
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(leftLat) * Math.cos(rightLat) * Math.sin(deltaLon / 2) ** 2;
+  return 2 * earthRadiusKm * Math.asin(Math.sqrt(a));
+}
+
 function nullableNumber(value: string | undefined): number | null {
   if (!value || value.trim() === '') {
     return null;
@@ -186,6 +276,7 @@ async function main(): Promise<void> {
   console.log(`Web data: ${outputPath}`);
   console.log(`City: ${dataset.city}`);
   console.log(`Observed venues: ${dataset.summary.observedVenues}`);
+  console.log(`Excluded outside target area: ${dataset.summary.excludedOutsideArea}`);
   console.log(`Notices found: ${dataset.summary.noticesFound}`);
   console.log(`Uncertain/failed: ${dataset.summary.uncertain + dataset.summary.failed}`);
 }
