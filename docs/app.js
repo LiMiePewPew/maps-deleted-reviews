@@ -1,10 +1,12 @@
 const DATA_URL = './data/osnabruck.json';
+const PAGE_SIZE = 50;
 
 const state = {
   data: null,
   query: '',
   filter: 'all',
   sort: 'notice-desc',
+  limit: PAGE_SIZE,
 };
 
 const elements = {
@@ -14,8 +16,8 @@ const elements = {
   observed: document.querySelector('#stat-observed'),
   notices: document.querySelector('#stat-notices'),
   share: document.querySelector('#stat-share'),
-  fiftyPlus: document.querySelector('#stat-50plus'),
-  hundredPlus: document.querySelector('#stat-100plus'),
+  fiftyOnePlus: document.querySelector('#stat-51plus'),
+  hundredOnePlus: document.querySelector('#stat-101plus'),
   uncertain: document.querySelector('#stat-uncertain'),
   rangeTotal: document.querySelector('#range-total'),
   rangeChart: document.querySelector('#range-chart'),
@@ -24,16 +26,15 @@ const elements = {
   qualityNotice: document.querySelector('#quality-notice'),
   qualityClean: document.querySelector('#quality-clean'),
   qualityUncertain: document.querySelector('#quality-uncertain'),
-  categoryChart: document.querySelector('#category-chart'),
-  signalReviews: document.querySelector('#signal-reviews'),
-  signalLargest: document.querySelector('#signal-largest'),
-  signalMedianReviews: document.querySelector('#signal-median-reviews'),
+  signalCandidates: document.querySelector('#signal-candidates'),
+  signalAreaExcluded: document.querySelector('#signal-area-excluded'),
+  signalNonGastroExcluded: document.querySelector('#signal-nongastro-excluded'),
   signalLastDate: document.querySelector('#signal-last-date'),
-  highlightGrid: document.querySelector('#highlight-grid'),
   resultsCount: document.querySelector('#results-count'),
   search: document.querySelector('#search-input'),
   sort: document.querySelector('#sort-select'),
   grid: document.querySelector('#venue-grid'),
+  loadMore: document.querySelector('#load-more'),
   empty: document.querySelector('#empty-state'),
   dataMessage: document.querySelector('#data-message'),
   dialog: document.querySelector('#venue-dialog'),
@@ -63,26 +64,36 @@ async function boot() {
 
 function bindControls() {
   elements.search?.addEventListener('input', (event) => {
-    state.query = event.target.value.trim().toLocaleLowerCase('de');
+    state.query = event.target.value.trim().toLocaleLowerCase('de-DE');
+    state.limit = PAGE_SIZE;
     renderResults();
   });
 
   elements.sort?.addEventListener('change', (event) => {
     state.sort = event.target.value;
+    state.limit = PAGE_SIZE;
     renderResults();
   });
 
   document.querySelectorAll('[data-filter]').forEach((button) => {
     button.addEventListener('click', () => {
       state.filter = button.dataset.filter;
+      state.limit = PAGE_SIZE;
       document.querySelectorAll('[data-filter]').forEach((candidate) => {
-        candidate.classList.toggle('is-active', candidate === button);
+        const active = candidate === button;
+        candidate.classList.toggle('is-active', active);
+        candidate.setAttribute('aria-pressed', active ? 'true' : 'false');
       });
       renderResults();
     });
   });
 
-  elements.dialogClose?.addEventListener('click', () => elements.dialog.close());
+  elements.loadMore?.addEventListener('click', () => {
+    state.limit += PAGE_SIZE;
+    renderResults();
+  });
+
+  elements.dialogClose?.addEventListener('click', () => elements.dialog?.close());
   elements.dialog?.addEventListener('click', (event) => {
     if (event.target === elements.dialog) {
       elements.dialog.close();
@@ -95,36 +106,52 @@ function normalizeData(data) {
   return {
     ...data,
     venues,
-    summary: data.summary ?? buildSummary(venues),
+    summary: { ...buildSummary(venues), ...(data.summary ?? {}) },
   };
 }
 
 function normalizeVenue(venue) {
+  const legacyMin = nullableNumber(venue.deletedReviewsMin);
+  const legacyMax = nullableNumber(venue.deletedReviewsMax);
+  const rawNotice = String(venue.reviewNotice || '').trim();
+  const legacyHasNotice = Boolean(
+    venue.hasNotice ||
+      (legacyMax !== null && legacyMax > 0) ||
+      (legacyMin !== null && legacyMin > 0) ||
+      rawNotice,
+  );
+  const noticeOpenEnded = Boolean(
+    venue.noticeOpenEnded ||
+      venue.noticeRangeKey === 'over-250' ||
+      /(?:über|ueber)\s+250/i.test(rawNotice) ||
+      (legacyHasNotice && legacyMin === 250 && legacyMax === 250),
+  );
+  const noticeMin = nullableNumber(venue.noticeMin) ?? (noticeOpenEnded ? 251 : legacyMin ?? 0);
+  const noticeMax = noticeOpenEnded
+    ? null
+    : nullableNumber(venue.noticeMax) ?? legacyMax ?? (legacyHasNotice ? noticeMin : 0);
+
   return {
-    venueType: venue.venueType ?? '',
-    name: venue.name ?? 'Unbekannter Betrieb',
+    searchTerm: venue.searchTerm ?? venue.venueType ?? '',
+    googleCategory: venue.googleCategory || null,
+    name: venue.name ?? 'Unbekanntes Profil',
     totalReviews: nullableNumber(venue.totalReviews),
-    deletedReviewsMin: nullableNumber(venue.deletedReviewsMin) ?? 0,
-    deletedReviewsMax: nullableNumber(venue.deletedReviewsMax) ?? 0,
-    percentageDeleted: nullableNumber(venue.percentageDeleted),
-    reviewNotice: venue.reviewNotice || null,
+    noticeRangeKey: venue.noticeRangeKey || null,
+    noticeMin,
+    noticeMax,
+    noticeOpenEnded,
+    reviewNotice: rawNotice || null,
     url: venue.url || '',
     address: venue.address || '',
     status: venue.status || 'partial',
-    error: venue.error || null,
     scrapedAt: venue.scrapedAt || null,
-    hasNotice: Boolean(
-      venue.hasNotice ||
-        nullableNumber(venue.deletedReviewsMax) > 0 ||
-        String(venue.reviewNotice || '').trim(),
-    ),
+    hasNotice: Boolean(legacyHasNotice || noticeMin > 0),
   };
 }
 
 function render() {
   renderSummary();
   renderAnalytics();
-  renderHighlights();
   renderResults();
 }
 
@@ -135,28 +162,28 @@ function renderSummary() {
   const observed = summary.observedVenues ?? venues.length;
   const notices = summary.noticesFound ?? venues.filter((venue) => venue.hasNotice).length;
   const uncertain = venues.filter((venue) => venue.status !== 'ok').length;
-  const fiftyPlus = venues.filter((venue) => venue.hasNotice && venue.deletedReviewsMax >= 50).length;
-  const hundredPlus = venues.filter((venue) => venue.hasNotice && venue.deletedReviewsMax >= 100).length;
+  const atLeast51 = venues.filter((venue) => venue.hasNotice && venue.noticeMin >= 51).length;
+  const atLeast101 = venues.filter((venue) => venue.hasNotice && venue.noticeMin >= 101).length;
   const share = observed > 0 ? (notices / observed) * 100 : 0;
 
   elements.observed.textContent = formatNumber(observed);
   elements.notices.textContent = formatNumber(notices);
   elements.share.textContent = observed > 0 ? formatPercentValue(share) : '—';
-  elements.fiftyPlus.textContent = formatNumber(fiftyPlus);
-  elements.hundredPlus.textContent = formatNumber(hundredPlus);
+  elements.fiftyOnePlus.textContent = formatNumber(atLeast51);
+  elements.hundredOnePlus.textContent = formatNumber(atLeast101);
   elements.uncertain.textContent = formatNumber(uncertain);
 
   if (observed > 0) {
     elements.snapshotHeadline.textContent = `Bei ${formatNumber(notices)} von ${formatNumber(observed)} Profilen wurde ein Hinweis gefunden.`;
-    elements.snapshotCopy.textContent = `Das sind ${formatPercentValue(share)}. Bei ${formatNumber(hundredPlus)} Profilen lag die obere Grenze des angezeigten Bereichs bei mindestens 100 Bewertungen.`;
+    elements.snapshotCopy.textContent = `${formatPercentValue(share)} des veröffentlichten Datensatzes. Das ist keine Hochrechnung auf alle Gastronomiebetriebe in Osnabrück.`;
   } else {
     elements.snapshotHeadline.textContent = 'Noch keine Daten veröffentlicht.';
     elements.snapshotCopy.textContent = 'Nach dem nächsten Export stehen hier die aktuellen Zahlen.';
   }
 
-  const date = data.generatedAt || summary.lastScrapedAt;
+  const date = summary.lastScrapedAt || data.generatedAt;
   elements.lastUpdated.textContent = date
-    ? `Stand: ${formatDateTime(date)}`
+    ? `Letzte Profilprüfung: ${formatDateTime(date)}`
     : 'Noch keine Daten veröffentlicht';
 }
 
@@ -164,8 +191,7 @@ function renderAnalytics() {
   const venues = state.data?.venues ?? [];
   renderRangeDistribution(venues);
   renderQuality(venues);
-  renderCategoryStats(venues);
-  renderSignals(venues);
+  renderScopeStats();
 }
 
 function renderRangeDistribution(venues) {
@@ -177,7 +203,18 @@ function renderRangeDistribution(venues) {
     distribution.set(key, (distribution.get(key) ?? 0) + 1);
   }
 
-  const preferredOrder = ['1', '2–5', '6–10', '11–20', '21–50', '51–100', '101–150', '151–200', '201–250', '250+'];
+  const preferredOrder = [
+    '1',
+    '2–5',
+    '6–10',
+    '11–20',
+    '21–50',
+    '51–100',
+    '101–150',
+    '151–200',
+    '201–250',
+    'Über 250',
+  ];
   const rows = [...distribution.entries()].sort((left, right) => {
     const leftIndex = preferredOrder.indexOf(left[0]);
     const rightIndex = preferredOrder.indexOf(right[0]);
@@ -231,112 +268,23 @@ function renderQuality(venues) {
     : 'var(--line)';
 }
 
-function renderCategoryStats(venues) {
-  const groups = new Map();
-
-  for (const venue of venues) {
-    const label = normalizeCategory(venue.venueType);
-    const current = groups.get(label) ?? { label, observed: 0, notices: 0 };
-    current.observed += 1;
-    if (venue.hasNotice) current.notices += 1;
-    groups.set(label, current);
-  }
-
-  const rows = [...groups.values()]
-    .filter((row) => row.notices > 0)
-    .sort((left, right) => right.notices - left.notices || right.observed - left.observed || left.label.localeCompare(right.label, 'de'))
-    .slice(0, 8);
-
-  if (rows.length === 0) {
-    elements.categoryChart.innerHTML = '<p class="chart-empty">Keine Kategorien mit Hinweisen im aktuellen Datensatz.</p>';
-    return;
-  }
-
-  const maxNotices = Math.max(...rows.map((row) => row.notices), 1);
-  elements.categoryChart.innerHTML = rows
-    .map((row) => {
-      const width = Math.max(5, (row.notices / maxNotices) * 100);
-      const share = row.observed ? (row.notices / row.observed) * 100 : 0;
-      return `
-        <div class="category-row">
-          <div class="category-copy">
-            <strong>${escapeHtml(row.label)}</strong>
-            <span>${formatNumber(row.notices)} von ${formatNumber(row.observed)} · ${formatPercentValue(share)}</span>
-          </div>
-          <div class="category-track"><span style="width:${width}%"></span></div>
-        </div>
-      `;
-    })
-    .join('');
-}
-
-function renderSignals(venues) {
-  const notices = venues.filter((venue) => venue.hasNotice);
-  const visibleReviewCounts = venues.reduce((sum, venue) => sum + (venue.totalReviews ?? 0), 0);
-  const reviewCounts = venues
-    .map((venue) => venue.totalReviews)
-    .filter((value) => Number.isFinite(value))
-    .sort((left, right) => left - right);
-  const medianReviews = median(reviewCounts);
-  const largestVenue = [...notices].sort(
-    (left, right) => right.deletedReviewsMax - left.deletedReviewsMax || right.deletedReviewsMin - left.deletedReviewsMin,
-  )[0];
-  const timestamps = venues
-    .map((venue) => Date.parse(venue.scrapedAt || ''))
-    .filter((value) => Number.isFinite(value));
-
-  elements.signalReviews.textContent = formatCompactNumber(visibleReviewCounts);
-  elements.signalLargest.textContent = largestVenue ? formatNoticeRange(largestVenue) : '—';
-  elements.signalMedianReviews.textContent = medianReviews === null ? '—' : formatNumber(Math.round(medianReviews));
-  elements.signalLastDate.textContent = timestamps.length
-    ? formatDate(new Date(Math.max(...timestamps)).toISOString())
-    : '—';
-}
-
-function renderHighlights() {
-  const venues = state.data?.venues ?? [];
-  const highlights = venues
-    .filter((venue) => venue.hasNotice)
-    .sort(
-      (left, right) =>
-        right.deletedReviewsMax - left.deletedReviewsMax ||
-        right.deletedReviewsMin - left.deletedReviewsMin ||
-        (right.totalReviews ?? 0) - (left.totalReviews ?? 0) ||
-        compareNames(left, right),
-    )
-    .slice(0, 6);
-
-  if (highlights.length === 0) {
-    elements.highlightGrid.innerHTML = '<p class="chart-empty">Keine Profile mit Hinweis im aktuellen Datensatz.</p>';
-    return;
-  }
-
-  elements.highlightGrid.innerHTML = highlights
-    .map(
-      (venue, index) => `
-        <button class="highlight-card" type="button" data-highlight-index="${index}">
-          <span class="highlight-category">${escapeHtml(venue.venueType || 'Gastronomie')}</span>
-          <strong class="highlight-range">${escapeHtml(formatNoticeRange(venue))}</strong>
-          <span class="highlight-name">${escapeHtml(venue.name)}</span>
-          <span class="highlight-meta">${venue.totalReviews !== null ? `${formatNumber(venue.totalReviews)} Bewertungen bei Google` : 'Bewertungszahl nicht verfügbar'}</span>
-        </button>
-      `,
-    )
-    .join('');
-
-  elements.highlightGrid.querySelectorAll('[data-highlight-index]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const venue = highlights[Number(button.dataset.highlightIndex)];
-      if (venue) openDetails(venue);
-    });
-  });
+function renderScopeStats() {
+  const summary = state.data?.summary ?? {};
+  elements.signalCandidates.textContent = formatNumber(summary.candidateProfiles ?? state.data?.venues.length ?? 0);
+  elements.signalAreaExcluded.textContent = formatNumber(summary.excludedOutsideArea ?? 0);
+  elements.signalNonGastroExcluded.textContent = formatNumber(summary.excludedClearlyNonGastro ?? 0);
+  elements.signalLastDate.textContent = summary.lastScrapedAt ? formatDate(summary.lastScrapedAt) : '—';
 }
 
 function renderResults() {
   if (!state.data) return;
 
-  const venues = getVisibleVenues();
-  elements.resultsCount.textContent = `${formatNumber(venues.length)} ${venues.length === 1 ? 'Treffer' : 'Treffer'}`;
+  const allVenues = getFilteredSortedVenues();
+  const venues = allVenues.slice(0, state.limit);
+  elements.resultsCount.textContent =
+    venues.length < allVenues.length
+      ? `${formatNumber(venues.length)} von ${formatNumber(allVenues.length)} Treffern`
+      : `${formatNumber(allVenues.length)} ${allVenues.length === 1 ? 'Treffer' : 'Treffer'}`;
   elements.grid.innerHTML = venues.map(renderVenueCard).join('');
 
   elements.grid.querySelectorAll('[data-venue-index]').forEach((button) => {
@@ -349,8 +297,9 @@ function renderResults() {
   const hasDataset = state.data.venues.length > 0;
   elements.empty.hidden = hasDataset;
   elements.grid.hidden = !hasDataset;
+  elements.loadMore.hidden = !hasDataset || venues.length >= allVenues.length;
 
-  if (hasDataset && venues.length === 0) {
+  if (hasDataset && allVenues.length === 0) {
     elements.dataMessage.hidden = false;
     elements.dataMessage.textContent = 'Keine Treffer für diese Auswahl.';
   } else {
@@ -368,18 +317,19 @@ function renderNoData(message) {
   render();
   elements.grid.hidden = true;
   elements.empty.hidden = false;
+  elements.loadMore.hidden = true;
   elements.dataMessage.hidden = false;
   elements.dataMessage.textContent = message;
 }
 
-function getVisibleVenues() {
+function getFilteredSortedVenues() {
   const venues = state.data.venues.filter((venue) => {
-    const haystack = `${venue.name} ${venue.venueType} ${venue.address}`.toLocaleLowerCase('de');
+    const haystack = `${venue.name} ${venue.googleCategory || ''} ${venue.searchTerm} ${venue.address}`.toLocaleLowerCase('de-DE');
     if (state.query && !haystack.includes(state.query)) return false;
 
     if (state.filter === 'notice') return venue.hasNotice;
-    if (state.filter === '50') return venue.hasNotice && venue.deletedReviewsMax >= 50;
-    if (state.filter === '100') return venue.hasNotice && venue.deletedReviewsMax >= 100;
+    if (state.filter === '51') return venue.hasNotice && venue.noticeMin >= 51;
+    if (state.filter === '101') return venue.hasNotice && venue.noticeMin >= 101;
     if (state.filter === 'uncertain') return venue.status !== 'ok';
     return true;
   });
@@ -392,8 +342,7 @@ function getVisibleVenues() {
 
     return (
       Number(right.hasNotice) - Number(left.hasNotice) ||
-      right.deletedReviewsMax - left.deletedReviewsMax ||
-      right.deletedReviewsMin - left.deletedReviewsMin ||
+      noticeSortValue(right) - noticeSortValue(left) ||
       compareNames(left, right)
     );
   });
@@ -402,15 +351,20 @@ function getVisibleVenues() {
 function renderVenueCard(venue, index) {
   const status = venueStatus(venue);
   const noticeText = venue.hasNotice ? formatNoticeRange(venue) : 'Kein Hinweis gesehen';
+  const category = venue.googleCategory
+    ? venue.googleCategory
+    : venue.searchTerm
+      ? `Suchbegriff: ${venue.searchTerm}`
+      : 'Google-Maps-Profil';
 
   return `
     <article class="venue-card ${venue.hasNotice ? 'has-notice' : ''}">
       <div class="card-top">
-        <span class="venue-category">${escapeHtml(venue.venueType || 'Gastronomie')}</span>
+        <span class="venue-category">${escapeHtml(category)}</span>
         <span class="venue-status ${status.className}">${escapeHtml(status.label)}</span>
       </div>
       <h3 class="venue-name">${escapeHtml(venue.name)}</h3>
-      <p class="venue-address">${escapeHtml(venue.address || 'Osnabrück')}</p>
+      <p class="venue-address">${escapeHtml(venue.address || 'Adresse nicht separat erfasst')}</p>
 
       <div class="notice-block">
         <span class="notice-label">Google-Hinweis</span>
@@ -420,11 +374,11 @@ function renderVenueCard(venue, index) {
       <div class="card-metrics">
         <span class="metric">
           <strong>${venue.totalReviews !== null ? formatNumber(venue.totalReviews) : '—'}</strong>
-          <span>Bewertungen bei Google</span>
+          <span>beim Crawl sichtbare Bewertungen</span>
         </span>
         <span class="metric">
           <strong>${venue.scrapedAt ? formatDate(venue.scrapedAt) : '—'}</strong>
-          <span>erfasst am</span>
+          <span>geprüft am</span>
         </span>
       </div>
 
@@ -436,33 +390,39 @@ function renderVenueCard(venue, index) {
 function openDetails(venue) {
   const noticeText = venue.hasNotice ? formatNoticeRange(venue) : 'Kein Hinweis gesehen';
   const status = venueStatus(venue);
+  const category = venue.googleCategory
+    ? venue.googleCategory
+    : venue.searchTerm
+      ? `gefunden über „${venue.searchTerm}“`
+      : 'Google-Maps-Profil';
 
   elements.dialogContent.innerHTML = `
-    <p class="dialog-kicker">${escapeHtml(venue.venueType || 'Betrieb')} · ${escapeHtml(status.label)}</p>
+    <p class="dialog-kicker">${escapeHtml(category)} · ${escapeHtml(status.label)}</p>
     <h2 class="dialog-title">${escapeHtml(venue.name)}</h2>
-    <p class="dialog-subtitle">${escapeHtml(venue.address || 'Osnabrück')}</p>
+    <p class="dialog-subtitle">${escapeHtml(venue.address || 'Adresse nicht separat erfasst')}</p>
 
     <div class="dialog-notice">
       <span class="notice-label">Google-Hinweis</span>
       <strong>${escapeHtml(noticeText)}</strong>
       <p>${
-        venue.reviewNotice
-          ? escapeHtml(venue.reviewNotice)
+        venue.hasNotice
+          ? 'Dieser Bereich wurde beim Crawl als öffentlicher Google-Transparenzhinweis beobachtet.'
           : venue.status === 'ok'
-            ? 'Bei diesem Crawl wurde kein entsprechender Hinweis angezeigt.'
-            : 'Dieses Profil konnte nicht vollständig geprüft werden.'
+            ? 'Bei diesem Crawl wurde kein entsprechender Hinweis beobachtet.'
+            : 'Dieses Profil konnte nicht vollständig auf den Hinweis geprüft werden.'
       }</p>
     </div>
 
     <div class="dialog-grid">
-      <div class="dialog-metric"><span>Bewertungen bei Google</span><strong>${venue.totalReviews !== null ? formatNumber(venue.totalReviews) : 'Nicht verfügbar'}</strong></div>
+      <div class="dialog-metric"><span>Beim Crawl sichtbare Bewertungen</span><strong>${venue.totalReviews !== null ? formatNumber(venue.totalReviews) : 'Nicht verfügbar'}</strong></div>
       <div class="dialog-metric"><span>Status</span><strong>${escapeHtml(status.label)}</strong></div>
-      <div class="dialog-metric"><span>Erfasst am</span><strong>${venue.scrapedAt ? formatDate(venue.scrapedAt) : 'Unbekannt'}</strong></div>
+      <div class="dialog-metric"><span>Geprüft am</span><strong>${venue.scrapedAt ? formatDate(venue.scrapedAt) : 'Unbekannt'}</strong></div>
     </div>
 
     <p class="dialog-explanation">
-      Die Bewertungszahl stammt aus dem Google-Profil. Einzelne Rezensionstexte wurden nicht ausgewertet.
-      Aus dem Hinweis allein lässt sich nicht ableiten, ob eine Löschung berechtigt oder unberechtigt war.
+      Einzelne Rezensionstexte wurden nicht ausgewertet. Aus dem Hinweis allein lässt sich nicht ableiten,
+      ob eine Löschung berechtigt oder unberechtigt war. Ein fehlender Hinweis ist kein Beleg für null
+      entfernte Bewertungen.
     </p>
 
     <div class="dialog-actions">
@@ -471,10 +431,10 @@ function openDetails(venue) {
     </div>
   `;
 
-  if (typeof elements.dialog.showModal === 'function') {
+  if (typeof elements.dialog?.showModal === 'function') {
     elements.dialog.showModal();
   } else {
-    elements.dialog.setAttribute('open', '');
+    elements.dialog?.setAttribute('open', '');
   }
 }
 
@@ -487,30 +447,23 @@ function venueStatus(venue) {
 }
 
 function rangeBucket(venue) {
-  const raw = String(venue.reviewNotice || '');
-  if (/\büber\s+250\b|\bover\s+250\b|more than\s+250/i.test(raw)) return '250+';
-
-  const min = venue.deletedReviewsMin;
-  const max = venue.deletedReviewsMax;
-  if (min === max) return formatNumber(max);
-  return `${formatNumber(min)}–${formatNumber(max)}`;
+  if (venue.noticeOpenEnded) return 'Über 250';
+  if (venue.noticeMin === venue.noticeMax) return formatNumber(venue.noticeMax ?? venue.noticeMin);
+  return `${formatNumber(venue.noticeMin)}–${formatNumber(venue.noticeMax)}`;
 }
 
 function formatNoticeRange(venue) {
-  const raw = String(venue.reviewNotice || '');
-  if (/\büber\s+250\b/i.test(raw)) return 'über 250 Bewertungen';
-  if (/\bover\s+250\b|more than\s+250/i.test(raw)) return 'mehr als 250 Bewertungen';
-
-  const min = venue.deletedReviewsMin;
-  const max = venue.deletedReviewsMax;
-  if (min === max) return `${formatNumber(max)} Bewertungen`;
-  return `${formatNumber(min)}–${formatNumber(max)} Bewertungen`;
+  if (venue.noticeOpenEnded) return 'Über 250 Bewertungen';
+  if (venue.noticeMin === venue.noticeMax) {
+    return `${formatNumber(venue.noticeMin)} ${venue.noticeMin === 1 ? 'Bewertung' : 'Bewertungen'}`;
+  }
+  return `${formatNumber(venue.noticeMin)}–${formatNumber(venue.noticeMax)} Bewertungen`;
 }
 
-function normalizeCategory(value) {
-  const trimmed = String(value || '').trim();
-  if (!trimmed) return 'Sonstige';
-  return trimmed.charAt(0).toLocaleUpperCase('de') + trimmed.slice(1);
+function noticeSortValue(venue) {
+  if (!venue.hasNotice) return 0;
+  if (venue.noticeOpenEnded) return 1_000_000;
+  return venue.noticeMax ?? venue.noticeMin ?? 0;
 }
 
 function buildSummary(venues) {
@@ -520,21 +473,17 @@ function buildSummary(venues) {
     .filter((value) => Number.isFinite(value));
 
   return {
+    candidateProfiles: venues.length,
     observedVenues: venues.length,
     noticesFound: notices.length,
     noNoticeObserved: venues.filter((venue) => venue.status === 'ok' && !venue.hasNotice).length,
     uncertain: venues.filter((venue) => venue.status === 'partial').length,
     failed: venues.filter((venue) => venue.status === 'failed').length,
-    visibleReviews: venues.reduce((sum, venue) => sum + (venue.totalReviews ?? 0), 0),
-    largestNoticeMax: Math.max(0, ...notices.map((venue) => venue.deletedReviewsMax)),
+    firstScrapedAt: timestamps.length ? new Date(Math.min(...timestamps)).toISOString() : null,
     lastScrapedAt: timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : null,
+    excludedOutsideArea: 0,
+    excludedClearlyNonGastro: 0,
   };
-}
-
-function median(values) {
-  if (values.length === 0) return null;
-  const middle = Math.floor(values.length / 2);
-  return values.length % 2 === 0 ? (values[middle - 1] + values[middle]) / 2 : values[middle];
 }
 
 function nullableNumber(value) {
@@ -548,12 +497,8 @@ function compareNames(left, right) {
 }
 
 function formatNumber(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '—';
   return new Intl.NumberFormat('de-DE').format(value);
-}
-
-function formatCompactNumber(value) {
-  if (value < 10_000) return formatNumber(value);
-  return new Intl.NumberFormat('de-DE', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
 }
 
 function formatPercentValue(value) {
