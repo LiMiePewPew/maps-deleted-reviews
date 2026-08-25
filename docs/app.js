@@ -57,7 +57,7 @@ async function boot() {
     render();
   } catch (error) {
     console.error(error);
-    renderNoData('Der öffentliche Datensatz ist noch nicht verfügbar.');
+    renderNoData('Der Datensatz konnte nicht geladen werden.');
   }
 }
 
@@ -147,17 +147,17 @@ function renderSummary() {
   elements.uncertain.textContent = formatNumber(uncertain);
 
   if (observed > 0) {
-    elements.snapshotHeadline.textContent = `${formatNumber(notices)} von ${formatNumber(observed)} Profilen zeigten einen Hinweis.`;
-    elements.snapshotCopy.textContent = `${formatPercentValue(share)} des beobachteten Datensatzes. ${formatNumber(hundredPlus)} Profile hatten einen Hinweisbereich mit einer Obergrenze von mindestens 100.`;
+    elements.snapshotHeadline.textContent = `Bei ${formatNumber(notices)} von ${formatNumber(observed)} Profilen wurde ein Hinweis gefunden.`;
+    elements.snapshotCopy.textContent = `Das sind ${formatPercentValue(share)}. Bei ${formatNumber(hundredPlus)} Profilen lag die obere Grenze des angezeigten Bereichs bei mindestens 100 Bewertungen.`;
   } else {
-    elements.snapshotHeadline.textContent = 'Noch kein Datensatz veröffentlicht.';
-    elements.snapshotCopy.textContent = 'Nach dem nächsten Export erscheinen hier automatisch die aktuellen Osnabrücker Kennzahlen.';
+    elements.snapshotHeadline.textContent = 'Noch keine Daten veröffentlicht.';
+    elements.snapshotCopy.textContent = 'Nach dem nächsten Export stehen hier die aktuellen Zahlen.';
   }
 
   const date = data.generatedAt || summary.lastScrapedAt;
   elements.lastUpdated.textContent = date
-    ? `Aktualisiert ${formatDateTime(date)}`
-    : 'Noch kein Datensatz veröffentlicht';
+    ? `Stand: ${formatDateTime(date)}`
+    : 'Noch keine Daten veröffentlicht';
 }
 
 function renderAnalytics() {
@@ -190,7 +190,7 @@ function renderRangeDistribution(venues) {
   elements.rangeTotal.textContent = `${formatNumber(notices.length)} ${notices.length === 1 ? 'Hinweis' : 'Hinweise'}`;
 
   if (rows.length === 0) {
-    elements.rangeChart.innerHTML = '<p class="chart-empty">Noch keine Hinweise im veröffentlichten Datensatz.</p>';
+    elements.rangeChart.innerHTML = '<p class="chart-empty">Keine Hinweise im aktuellen Datensatz.</p>';
     return;
   }
 
@@ -248,7 +248,7 @@ function renderCategoryStats(venues) {
     .slice(0, 8);
 
   if (rows.length === 0) {
-    elements.categoryChart.innerHTML = '<p class="chart-empty">Noch keine Kategorien mit Hinweisen verfügbar.</p>';
+    elements.categoryChart.innerHTML = '<p class="chart-empty">Keine Kategorien mit Hinweisen im aktuellen Datensatz.</p>';
     return;
   }
 
@@ -307,7 +307,7 @@ function renderHighlights() {
     .slice(0, 6);
 
   if (highlights.length === 0) {
-    elements.highlightGrid.innerHTML = '<p class="chart-empty">Noch keine Profile mit Hinweis im veröffentlichten Datensatz.</p>';
+    elements.highlightGrid.innerHTML = '<p class="chart-empty">Keine Profile mit Hinweis im aktuellen Datensatz.</p>';
     return;
   }
 
@@ -318,7 +318,7 @@ function renderHighlights() {
           <span class="highlight-category">${escapeHtml(venue.venueType || 'Gastronomie')}</span>
           <strong class="highlight-range">${escapeHtml(formatNoticeRange(venue))}</strong>
           <span class="highlight-name">${escapeHtml(venue.name)}</span>
-          <span class="highlight-meta">${venue.totalReviews !== null ? `${formatNumber(venue.totalReviews)} sichtbare Reviews` : 'Reviewzahl nicht verfügbar'}</span>
+          <span class="highlight-meta">${venue.totalReviews !== null ? `${formatNumber(venue.totalReviews)} Bewertungen bei Google` : 'Bewertungszahl nicht verfügbar'}</span>
         </button>
       `,
     )
@@ -336,7 +336,7 @@ function renderResults() {
   if (!state.data) return;
 
   const venues = getVisibleVenues();
-  elements.resultsCount.textContent = `${formatNumber(venues.length)} ${venues.length === 1 ? 'Ergebnis' : 'Ergebnisse'}`;
+  elements.resultsCount.textContent = `${formatNumber(venues.length)} ${venues.length === 1 ? 'Treffer' : 'Treffer'}`;
   elements.grid.innerHTML = venues.map(renderVenueCard).join('');
 
   elements.grid.querySelectorAll('[data-venue-index]').forEach((button) => {
@@ -352,7 +352,7 @@ function renderResults() {
 
   if (hasDataset && venues.length === 0) {
     elements.dataMessage.hidden = false;
-    elements.dataMessage.textContent = 'Für diese Suche oder diesen Filter gibt es keine Treffer.';
+    elements.dataMessage.textContent = 'Keine Treffer für diese Auswahl.';
   } else {
     elements.dataMessage.hidden = true;
   }
@@ -401,7 +401,7 @@ function getVisibleVenues() {
 
 function renderVenueCard(venue, index) {
   const status = venueStatus(venue);
-  const noticeText = venue.hasNotice ? formatNoticeRange(venue) : 'Kein Hinweis beobachtet';
+  const noticeText = venue.hasNotice ? formatNoticeRange(venue) : 'Kein Hinweis gesehen';
 
   return `
     <article class="venue-card ${venue.hasNotice ? 'has-notice' : ''}">
@@ -413,29 +413,28 @@ function renderVenueCard(venue, index) {
       <p class="venue-address">${escapeHtml(venue.address || 'Osnabrück')}</p>
 
       <div class="notice-block">
-        <span class="notice-label">Google Maps Hinweis</span>
+        <span class="notice-label">Google-Hinweis</span>
         <strong class="notice-range ${venue.hasNotice ? '' : 'muted'}">${escapeHtml(noticeText)}</strong>
       </div>
 
       <div class="card-metrics">
         <span class="metric">
           <strong>${venue.totalReviews !== null ? formatNumber(venue.totalReviews) : '—'}</strong>
-          <span>sichtbare Review-Anzahl</span>
+          <span>Bewertungen bei Google</span>
         </span>
         <span class="metric">
           <strong>${venue.scrapedAt ? formatDate(venue.scrapedAt) : '—'}</strong>
-          <span>beobachtet</span>
+          <span>erfasst am</span>
         </span>
       </div>
 
-      <button class="card-action" type="button" data-venue-index="${index}" aria-label="Details zu ${escapeAttribute(venue.name)} anzeigen">Details →</button>
+      <button class="card-action" type="button" data-venue-index="${index}" aria-label="Details zu ${escapeAttribute(venue.name)} anzeigen">Ansehen</button>
     </article>
   `;
 }
 
 function openDetails(venue) {
-  const noticeText = venue.hasNotice ? formatNoticeRange(venue) : 'Kein Hinweis beobachtet';
-  const percentage = venue.percentageDeleted;
+  const noticeText = venue.hasNotice ? formatNoticeRange(venue) : 'Kein Hinweis gesehen';
   const status = venueStatus(venue);
 
   elements.dialogContent.innerHTML = `
@@ -444,34 +443,31 @@ function openDetails(venue) {
     <p class="dialog-subtitle">${escapeHtml(venue.address || 'Osnabrück')}</p>
 
     <div class="dialog-notice">
-      <span class="notice-label">Beobachteter Google Maps Hinweis</span>
+      <span class="notice-label">Google-Hinweis</span>
       <strong>${escapeHtml(noticeText)}</strong>
       <p>${
         venue.reviewNotice
           ? escapeHtml(venue.reviewNotice)
           : venue.status === 'ok'
-            ? 'In diesem Crawl wurde kein entsprechender Transparenzhinweis beobachtet.'
-            : 'Der Hinweis-Check war bei diesem Profil nicht vollständig.'
+            ? 'Bei diesem Crawl wurde kein entsprechender Hinweis angezeigt.'
+            : 'Dieses Profil konnte nicht vollständig geprüft werden.'
       }</p>
     </div>
 
     <div class="dialog-grid">
-      <div class="dialog-metric"><span>Sichtbare Review-Anzahl</span><strong>${venue.totalReviews !== null ? formatNumber(venue.totalReviews) : 'Nicht verfügbar'}</strong></div>
-      <div class="dialog-metric"><span>Check-Status</span><strong>${escapeHtml(status.label)}</strong></div>
-      <div class="dialog-metric"><span>Rechnerischer Anteil</span><strong>${percentage !== null ? `${formatPercentValue(percentage)}*` : '—'}</strong></div>
-      <div class="dialog-metric"><span>Beobachtet</span><strong>${venue.scrapedAt ? formatDate(venue.scrapedAt) : 'Unbekannt'}</strong></div>
+      <div class="dialog-metric"><span>Bewertungen bei Google</span><strong>${venue.totalReviews !== null ? formatNumber(venue.totalReviews) : 'Nicht verfügbar'}</strong></div>
+      <div class="dialog-metric"><span>Status</span><strong>${escapeHtml(status.label)}</strong></div>
+      <div class="dialog-metric"><span>Erfasst am</span><strong>${venue.scrapedAt ? formatDate(venue.scrapedAt) : 'Unbekannt'}</strong></div>
     </div>
 
     <p class="dialog-explanation">
-      * Der rechnerische Anteil basiert auf dem Mittelpunkt des von Google angegebenen Bereichs und der sichtbaren Review-Anzahl und ist nur eine Näherung.
-      Es wurden keine einzelnen Rezensionstexte für diese Darstellung ausgewertet.
-      Ein Transparenzhinweis beweist weder Fehlverhalten des Betriebs noch, dass die entfernten Bewertungen unberechtigt waren.
-      Ein fehlender Hinweis bedeutet lediglich, dass während dieses Crawls keiner beobachtet wurde.
+      Die Bewertungszahl stammt aus dem Google-Profil. Einzelne Rezensionstexte wurden nicht ausgewertet.
+      Aus dem Hinweis allein lässt sich nicht ableiten, ob eine Löschung berechtigt oder unberechtigt war.
     </p>
 
     <div class="dialog-actions">
-      ${venue.url ? `<a class="primary-link" href="${escapeAttribute(venue.url)}" target="_blank" rel="noreferrer">In Google Maps öffnen ↗</a>` : ''}
-      <a class="secondary-link" href="https://github.com/LiMiePewPew/maps-deleted-reviews" target="_blank" rel="noreferrer">Methodik & Code ↗</a>
+      ${venue.url ? `<a class="primary-link" href="${escapeAttribute(venue.url)}" target="_blank" rel="noreferrer">Bei Google Maps öffnen ↗</a>` : ''}
+      <a class="secondary-link" href="https://github.com/LiMiePewPew/maps-deleted-reviews" target="_blank" rel="noreferrer">Quellcode und Methodik ↗</a>
     </div>
   `;
 
@@ -484,10 +480,10 @@ function openDetails(venue) {
 
 function venueStatus(venue) {
   if (venue.status === 'failed' || venue.status === 'partial') {
-    return { label: 'Unvollständig', className: 'uncertain' };
+    return { label: 'Nicht vollständig', className: 'uncertain' };
   }
   if (venue.hasNotice) return { label: 'Hinweis gefunden', className: 'notice' };
-  return { label: 'Beobachtet', className: '' };
+  return { label: 'Kein Hinweis gesehen', className: '' };
 }
 
 function rangeBucket(venue) {
@@ -502,13 +498,13 @@ function rangeBucket(venue) {
 
 function formatNoticeRange(venue) {
   const raw = String(venue.reviewNotice || '');
-  if (/\büber\s+250\b/i.test(raw)) return 'über 250 entfernt';
-  if (/\bover\s+250\b|more than\s+250/i.test(raw)) return '250+ entfernt';
+  if (/\büber\s+250\b/i.test(raw)) return 'über 250 Bewertungen';
+  if (/\bover\s+250\b|more than\s+250/i.test(raw)) return 'mehr als 250 Bewertungen';
 
   const min = venue.deletedReviewsMin;
   const max = venue.deletedReviewsMax;
-  if (min === max) return `${formatNumber(max)} entfernt`;
-  return `${formatNumber(min)}–${formatNumber(max)} entfernt`;
+  if (min === max) return `${formatNumber(max)} Bewertungen`;
+  return `${formatNumber(min)}–${formatNumber(max)} Bewertungen`;
 }
 
 function normalizeCategory(value) {
@@ -574,7 +570,7 @@ function formatDate(value) {
 function formatDateTime(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
-    ? 'zu unbekanntem Zeitpunkt'
+    ? 'unbekannt'
     : new Intl.DateTimeFormat('de-DE', {
         day: '2-digit',
         month: '2-digit',
