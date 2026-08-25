@@ -1,18 +1,20 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "city": "Osnabrück",
   "generatedAt": null,
-  "source": "Google Maps public review-deletion notices",
+  "source": "Google Maps public review-removal transparency notices",
   "sourceCsv": null,
   "summary": {
+    "candidateProfiles": 0,
     "observedVenues": 0,
     "noticesFound": 0,
     "noNoticeObserved": 0,
     "uncertain": 0,
     "failed": 0,
-    "visibleReviews": 0,
-    "largestNoticeMax": 0,
-    "lastScrapedAt": null
+    "firstScrapedAt": null,
+    "lastScrapedAt": null,
+    "excludedOutsideArea": 0,
+    "excludedClearlyNonGastro": 0
   },
   "venues": []
 }
