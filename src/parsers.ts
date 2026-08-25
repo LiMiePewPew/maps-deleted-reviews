@@ -1,10 +1,11 @@
 import type { DeletedReviews } from './types.js';
 
+const DELETED_REVIEW_OVER_250 =
+  /(?:über|ueber)\s+250\s+Bewertung(?:en)?\s+aufgrund\s+von\s+Beschwerden\s+wegen\s+Diffamierung\s+entfernt\.?/i;
 const DELETED_REVIEW_RANGE =
   /([\d.\s]+|ein(?:e|en|er|es|s)?|zwei|drei|vier|fünf|fuenf|sechs|sieben|acht|neun|zehn)\s+bis\s+([\d.\s]+|ein(?:e|en|er|es|s)?|zwei|drei|vier|fünf|fuenf|sechs|sieben|acht|neun|zehn)\s+Bewertung(?:en)?\s+aufgrund\s+von\s+Beschwerden\s+wegen\s+Diffamierung\s+entfernt\.?/i;
 const DELETED_REVIEW_SINGLE =
   /([\d.\s]+|ein(?:e|en|er|es|s)?|zwei|drei|vier|fünf|fuenf|sechs|sieben|acht|neun|zehn)\s+Bewertung(?:en)?\s+aufgrund\s+von\s+Beschwerden\s+wegen\s+Diffamierung\s+entfernt\.?/i;
-const REVIEW_COUNT = /(\d[\d.\s]*)\s+Rezension(?:en)?/i;
 const REVIEW_COUNT_GLOBAL = /(\d[\d.\s]*)\s+Rezension(?:en)?/gi;
 const COMPACT_REVIEW_COUNT =
   /(?:^|[^\d.])[1-5][,.]\d(?![\d.])\s*\(?\s*(\d[\d.\s]*)\s*\)?\s*(?:Rezension(?:en)?)?/i;
@@ -13,6 +14,21 @@ const COMPACT_STAR_RATING = /\b([1-5][,.]\d)\s+\(?\d[\d.\s]*\)?\s+Rezension(?:en
 
 export function parseDeletedReviews(text: string): DeletedReviews | null {
   const normalized = normalizeWhitespace(text);
+
+  // Must run before the single-count matcher. Otherwise Google's
+  // "Über 250 Bewertungen ..." is silently truncated to an exact 250.
+  const over250Match = normalized.match(DELETED_REVIEW_OVER_250);
+  if (over250Match) {
+    return {
+      min: 250,
+      max: 250,
+      estimate: 250,
+      rawText: over250Match[0],
+      openEnded: true,
+      rangeKey: 'over_250',
+    };
+  }
+
   const rangeMatch = normalized.match(DELETED_REVIEW_RANGE);
   if (rangeMatch) {
     const min = parseCount(rangeMatch[1]);
