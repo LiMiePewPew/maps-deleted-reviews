@@ -4,37 +4,39 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 interface WebVenue {
-  venueType: string;
+  searchTerm: string;
+  googleCategory: string | null;
   name: string;
   totalReviews: number | null;
-  deletedReviewsMin: number;
-  deletedReviewsMax: number;
-  percentageDeleted: number | null;
+  noticeRangeKey: string | null;
+  noticeMin: number | null;
+  noticeMax: number | null;
+  noticeOpenEnded: boolean;
   reviewNotice: string | null;
   url: string;
   address: string;
   status: string;
-  error: string | null;
   scrapedAt: string | null;
   hasNotice: boolean;
 }
 
 interface WebDataset {
-  schemaVersion: 1;
+  schemaVersion: 2;
   city: string;
   generatedAt: string;
   source: string;
   sourceCsv: string;
   summary: {
+    candidateProfiles: number;
     observedVenues: number;
     noticesFound: number;
     noNoticeObserved: number;
     uncertain: number;
     failed: number;
-    visibleReviews: number;
-    largestNoticeMax: number;
+    firstScrapedAt: string | null;
     lastScrapedAt: string | null;
     excludedOutsideArea: number;
+    excludedClearlyNonGastro: number;
   };
   venues: WebVenue[];
 }
@@ -59,43 +61,66 @@ const OSNABRUECK_POSTCODES = new Set([
 const NEARBY_MUNICIPALITY_PATTERN =
   /\b(?:belm|bissendorf|georgsmarienh(?:ü|u)tte|hasbergen|lotte|wallenhorst|bramsche|hagen\s+(?:am|a\.)\s+teutoburger\s+wald)\b/i;
 
+const CLEARLY_NON_GASTRO_NAME_PATTERN =
+  /\b(?:thai[- ]?massage|massage|nagelstudio|nails?|lashes?|tattoo|piercing|sprachschule|parkplatz|bahnhof|eventagentur|mädchenzentrum|fitnessstudio|fahrschule)\b|design\s+in\s+stein/i;
+const CLEARLY_NON_GASTRO_CATEGORY_PATTERN =
+  /\b(?:massage|massage spa|nail salon|beautician|eyelash salon|tattoo|piercing|parking|railway|train station|language school|beauty salon|fitness center|driving school)\b/i;
+const CLEARLY_NON_GASTRO_EXACT_NAMES = new Set(
+  [
+    'MariJing Thai Massage & Asia Wellness',
+    'Ha Beauty Nails, Lashes & More',
+    'Studio Royal Osnabrück',
+    'Italienisches Design in Stein',
+    'Sprachschule inlingua',
+    'Osnabrück Hbf',
+    'Casino werk',
+    'LOTTA - DEINE EVENTAGENTUR',
+  ].map(normalizeText),
+);
+
 export function buildWebDataset(rawCsv: string, city = DEFAULT_CITY, sourceCsv = DEFAULT_SOURCE): WebDataset {
   const records = parseCsv(rawCsv);
   const candidates = records.map(toWebVenue).filter((venue) => venue.name.length > 0);
-  const venues = candidates.filter((venue) => !isClearlyOutsideTargetArea(venue, city));
-  const excludedOutsideArea = candidates.length - venues.length;
+  const insideArea = candidates.filter((venue) => !isClearlyOutsideTargetArea(venue, city));
+  const venues = insideArea.filter((venue) => !isClearlyNonGastroProfile(venue));
+  const excludedOutsideArea = candidates.length - insideArea.length;
+  const excludedClearlyNonGastro = insideArea.length - venues.length;
   const notices = venues.filter((venue) => venue.hasNotice);
   const timestamps = venues
     .map((venue) => Date.parse(venue.scrapedAt ?? ''))
     .filter((value) => Number.isFinite(value));
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     city,
     generatedAt: new Date().toISOString(),
-    source: 'Google Maps public review-deletion notices',
+    source: 'Google Maps public review-removal transparency notices',
     sourceCsv,
     summary: {
+      candidateProfiles: candidates.length,
       observedVenues: venues.length,
       noticesFound: notices.length,
       noNoticeObserved: venues.filter((venue) => venue.status === 'ok' && !venue.hasNotice).length,
       uncertain: venues.filter((venue) => venue.status === 'partial').length,
       failed: venues.filter((venue) => venue.status === 'failed').length,
-      visibleReviews: venues.reduce((sum, venue) => sum + (venue.totalReviews ?? 0), 0),
-      largestNoticeMax: Math.max(0, ...notices.map((venue) => venue.deletedReviewsMax)),
+      firstScrapedAt: timestamps.length ? new Date(Math.min(...timestamps)).toISOString() : null,
       lastScrapedAt: timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : null,
       excludedOutsideArea,
+      excludedClearlyNonGastro,
     },
     venues: [...venues].sort(
       (left, right) =>
         Number(right.hasNotice) - Number(left.hasNotice) ||
-        right.deletedReviewsMax - left.deletedReviewsMax ||
+        noticeSortValue(right) - noticeSortValue(left) ||
         left.name.localeCompare(right.name, 'de', { sensitivity: 'base' }),
     ),
   };
 }
 
-export function isClearlyOutsideTargetArea(venue: Pick<WebVenue, 'name' | 'address' | 'url'>, city = DEFAULT_CITY): boolean {
+export function isClearlyOutsideTargetArea(
+  venue: Pick<WebVenue, 'name' | 'address' | 'url'>,
+  city = DEFAULT_CITY,
+): boolean {
   if (normalizeCity(city) !== 'osnabruck') {
     return false;
   }
@@ -122,20 +147,40 @@ export function isClearlyOutsideTargetArea(venue: Pick<WebVenue, 'name' | 'addre
   return haversineDistanceKm(OSNABRUECK_CENTER, coordinates) > OSNABRUECK_MAX_DISTANCE_KM;
 }
 
+export function isClearlyNonGastroProfile(
+  venue: Pick<WebVenue, 'name' | 'googleCategory'>,
+): boolean {
+  const normalizedName = normalizeText(venue.name);
+  if (CLEARLY_NON_GASTRO_EXACT_NAMES.has(normalizedName)) {
+    return true;
+  }
+
+  if (CLEARLY_NON_GASTRO_NAME_PATTERN.test(venue.name)) {
+    return true;
+  }
+
+  return Boolean(
+    venue.googleCategory && CLEARLY_NON_GASTRO_CATEGORY_PATTERN.test(venue.googleCategory),
+  );
+}
+
 export function parseGoogleMapsCoordinates(url: string): { lat: number; lon: number } | null {
   if (!url) {
     return null;
   }
 
   const decoded = decodeURIComponent(url);
-  const atMatch = decoded.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:,|\/|$)/);
-  if (atMatch) {
-    return { lat: Number(atMatch[1]), lon: Number(atMatch[2]) };
-  }
 
+  // !3d/!4d identify the actual place in common Maps URLs. The @lat,lon pair can
+  // merely describe the viewport, so it is only a fallback for area filtering.
   const dataMatch = decoded.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
   if (dataMatch) {
     return { lat: Number(dataMatch[1]), lon: Number(dataMatch[2]) };
+  }
+
+  const atMatch = decoded.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:,|\/|$)/);
+  if (atMatch) {
+    return { lat: Number(atMatch[1]), lon: Number(atMatch[2]) };
   }
 
   return null;
@@ -202,25 +247,60 @@ export function parseCsv(raw: string): Array<Record<string, string>> {
 }
 
 function toWebVenue(record: Record<string, string>): WebVenue {
-  const deletedReviewsMin = numberOrZero(record.deleted_reviews_min);
-  const deletedReviewsMax = numberOrZero(record.deleted_reviews_max);
+  const legacyMin = numberOrZero(record.deleted_reviews_min);
+  const legacyMax = numberOrZero(record.deleted_reviews_max);
   const reviewNotice = emptyToNull(record.review_notice);
+  const hasNotice = legacyMax > 0 || legacyMin > 0 || Boolean(reviewNotice);
+  const noticeOpenEnded =
+    hasNotice &&
+    (isOver250Notice(reviewNotice) || (legacyMin === 250 && legacyMax === 250));
+  const noticeMin = hasNotice ? (noticeOpenEnded ? 251 : legacyMin) : null;
+  const noticeMax = hasNotice ? (noticeOpenEnded ? null : legacyMax) : null;
 
   return {
-    venueType: record.venue_type?.trim() ?? '',
+    searchTerm: record.venue_type?.trim() ?? '',
+    googleCategory: emptyToNull(record.google_category),
     name: record.name?.trim() ?? '',
     totalReviews: nullableNumber(record.total_reviews),
-    deletedReviewsMin,
-    deletedReviewsMax,
-    percentageDeleted: nullableNumber(record.percentage_deleted),
+    noticeRangeKey: hasNotice ? buildNoticeRangeKey(noticeMin, noticeMax, noticeOpenEnded) : null,
+    noticeMin,
+    noticeMax,
+    noticeOpenEnded,
     reviewNotice,
     url: record.url?.trim() ?? '',
     address: record.address?.trim() ?? '',
     status: record.status?.trim() || 'partial',
-    error: emptyToNull(record.error),
     scrapedAt: emptyToNull(record.scraped_at),
-    hasNotice: deletedReviewsMax > 0 || Boolean(reviewNotice),
+    hasNotice,
   };
+}
+
+function isOver250Notice(value: string | null): boolean {
+  return Boolean(value && /(?:über|ueber)\s+250/i.test(value));
+}
+
+function buildNoticeRangeKey(
+  min: number | null,
+  max: number | null,
+  openEnded: boolean,
+): string {
+  if (openEnded) {
+    return 'over-250';
+  }
+  if (min === null || max === null) {
+    return 'unknown';
+  }
+  return min === max ? String(min) : `${min}-${max}`;
+}
+
+function noticeSortValue(venue: WebVenue): number {
+  if (!venue.hasNotice) {
+    return 0;
+  }
+  if (venue.noticeOpenEnded) {
+    return 1_000_000;
+  }
+  return venue.noticeMax ?? venue.noticeMin ?? 0;
 }
 
 function normalizeCity(value: string): string {
@@ -229,6 +309,10 @@ function normalizeCity(value: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z]/g, '');
+}
+
+function normalizeText(value: string): string {
+  return value.normalize('NFKC').toLocaleLowerCase('de-DE').replace(/\s+/g, ' ').trim();
 }
 
 function haversineDistanceKm(
@@ -275,8 +359,10 @@ async function main(): Promise<void> {
 
   console.log(`Web data: ${outputPath}`);
   console.log(`City: ${dataset.city}`);
-  console.log(`Observed venues: ${dataset.summary.observedVenues}`);
+  console.log(`Candidate profiles: ${dataset.summary.candidateProfiles}`);
+  console.log(`Observed profiles after public filters: ${dataset.summary.observedVenues}`);
   console.log(`Excluded outside target area: ${dataset.summary.excludedOutsideArea}`);
+  console.log(`Excluded clearly non-gastro: ${dataset.summary.excludedClearlyNonGastro}`);
   console.log(`Notices found: ${dataset.summary.noticesFound}`);
   console.log(`Uncertain/failed: ${dataset.summary.uncertain + dataset.summary.failed}`);
 }
