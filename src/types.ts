@@ -41,6 +41,7 @@ export interface Venue {
   name: string;
   url: string;
   address?: string;
+  googleCategory?: string;
 }
 
 export interface DeletedReviews {
@@ -48,6 +49,13 @@ export interface DeletedReviews {
   max: number;
   estimate: number;
   rawText: string;
+  /**
+   * Google uses an open-ended "Über 250" bucket. The numeric max remains 250
+   * as a backwards-compatible boundary sentinel; consumers must use
+   * openEnded/rawText and must never present it as an exact count.
+   */
+  openEnded?: boolean;
+  rangeKey?: 'over_250';
 }
 
 export interface ScrapedVenue extends Venue {
