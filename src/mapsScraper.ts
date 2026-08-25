@@ -315,7 +315,6 @@ export function shouldRefetchScrapedRow(row: ScrapedVenue): boolean {
     row.status === 'failed' ||
     row.status === 'partial' ||
     row.totalReviews === null ||
-    (row.currentStarRating !== null && row.currentStarRating > 5) ||
     row.totalReviews === 0
   );
 }
@@ -385,6 +384,7 @@ async function scrapeVenue(
     overviewText = await getExtractionText(page);
   }
 
+  const venueMetadata = await extractVenueMetadata(page);
   const overviewRating = parseStarRating(overviewText);
   const overviewReviewCount = parseReviewCount(overviewText);
 
@@ -417,13 +417,15 @@ async function scrapeVenue(
     deletedReviewsEstimate: deleted?.estimate ?? 0,
   });
 
+  // Notice-check confidence is independent of star-rating extraction. A rating
+  // parser issue must not turn an otherwise complete notice check into partial.
   const status: ScrapedVenue['status'] =
-    totalReviews === null || rating === null || (!openedReviews && deleted === null)
-      ? 'partial'
-      : 'ok';
+    totalReviews === null || (!openedReviews && deleted === null) ? 'partial' : 'ok';
 
   return {
     ...venue,
+    address: venueMetadata.address ?? venue.address,
+    googleCategory: venueMetadata.googleCategory ?? venue.googleCategory,
     venueType,
     totalReviews,
     deletedReviewsMin: deleted?.min ?? 0,
@@ -550,6 +552,41 @@ async function extractVenueName(anchor: Locator): Promise<string | null> {
 
   const text = normalizeWhitespace(await anchor.innerText().catch(() => ''));
   return text.length > 0 ? text.split('\n')[0] ?? text : null;
+}
+
+async function extractVenueMetadata(
+  page: Page,
+): Promise<Pick<Venue, 'address' | 'googleCategory'>> {
+  const addressElement = page
+    .locator('button[data-item-id="address"], [data-item-id="address"]')
+    .first();
+  const rawAddress = normalizeWhitespace(
+    (await addressElement.getAttribute('aria-label').catch(() => null)) ??
+      (await addressElement.innerText().catch(() => '')),
+  );
+  const address = rawAddress
+    .replace(/^(?:Adresse|Address)\s*:\s*/i, '')
+    .trim();
+
+  const categoryCandidates = [
+    page.locator('button.DkEaL').first(),
+    page.locator('button[jsaction*="category"]').first(),
+  ];
+  let googleCategory = '';
+  for (const candidate of categoryCandidates) {
+    if ((await candidate.count()) === 0 || !(await candidate.isVisible().catch(() => false))) {
+      continue;
+    }
+    googleCategory = normalizeWhitespace(await candidate.innerText().catch(() => ''));
+    if (googleCategory) {
+      break;
+    }
+  }
+
+  return {
+    address: address || undefined,
+    googleCategory: googleCategory || undefined,
+  };
 }
 
 async function openReviewsTab(page: Page): Promise<boolean> {
@@ -762,6 +799,7 @@ function reuseCachedVenue(cached: ScrapedVenue, venue: Venue, venueType: string)
     ...cached,
     ...venue,
     address: venue.address ?? cached.address,
+    googleCategory: venue.googleCategory ?? cached.googleCategory,
     venueType,
   };
 }
@@ -785,6 +823,7 @@ async function loadExistingRows(outputCsvPath: string): Promise<ScrapedVenue[]> 
         venueType: cell('venue_type') ?? '',
         name: cell('name') ?? cells[0] ?? '',
         address: cell('address') || cells[1] || undefined,
+        googleCategory: cell('google_category') || undefined,
         url: cell('url') ?? cells[2] ?? '',
         totalReviews: parseNullableNumber(cell('total_reviews') ?? cells[3]),
         deletedReviewsMin: Number(cell('deleted_reviews_min') ?? cells[4] ?? 0),
