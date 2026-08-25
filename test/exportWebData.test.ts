@@ -164,6 +164,24 @@ describe('web data export', () => {
     ).toBe(false);
   });
 
+  it('filters obvious lodging-only profiles but keeps mixed restaurant or cafe profiles', () => {
+    expect(
+      isClearlyNonGastroProfile({ name: 'Hotel Neustadt', googleCategory: null }),
+    ).toBe(true);
+    expect(
+      isClearlyNonGastroProfile({ name: 'Campingplatz Bullerby', googleCategory: null }),
+    ).toBe(true);
+    expect(
+      isClearlyNonGastroProfile({ name: 'Hotel-Restaurant Busch Atter', googleCategory: null }),
+    ).toBe(false);
+    expect(
+      isClearlyNonGastroProfile({
+        name: 'Hotel the Farmhouse No. 50 – Cafe & Eventrooms',
+        googleCategory: 'Hotel',
+      }),
+    ).toBe(false);
+  });
+
   it('counts non-gastro exclusions separately from area exclusions', () => {
     const dataset = buildWebDataset(
       [
