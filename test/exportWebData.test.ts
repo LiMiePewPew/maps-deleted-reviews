@@ -33,6 +33,7 @@ describe('web data export', () => {
     expect(dataset.summary.largestNoticeMax).toBe(50);
     expect(dataset.venues[0]?.hasNotice).toBe(true);
     expect(dataset.venues[1]?.hasNotice).toBe(false);
+    expect(dataset.venues[0]).not.toHaveProperty('currentStarRating');
   });
 
   it('reports partial and failed rows as uncertain output quality', () => {
