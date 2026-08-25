@@ -198,6 +198,8 @@ code { font-family: "SFMono-Regular", Consolas, monospace; }
 .panel-heading h3 { margin: 0; font-size: 1.1rem; font-weight: 700; letter-spacing: -.015em; }
 .panel-meta { color: var(--muted); font-size: .73rem; }
 .panel-note { margin: 20px 0 0; color: #7b7f85; font-size: .75rem; line-height: 1.55; }
+.panel-note a { color: var(--accent); }
+.panel-note a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .chart-empty { margin: 20px 0; color: var(--muted); font-size: .86rem; }
 
 .bar-chart { display: grid; gap: 11px; }
@@ -406,6 +408,18 @@ code { font-family: "SFMono-Regular", Consolas, monospace; }
   font-size: .72rem;
 }
 .card-action:hover { border-color: #999; color: #111; }
+.load-more-row { display: flex; justify-content: center; padding-top: 24px; }
+.load-more {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  color: #4f545b;
+  cursor: pointer;
+  font-size: .8rem;
+}
+.load-more:hover { border-color: #999; color: #111; }
 .data-message {
   margin: 0 0 16px;
   padding: 11px 12px;
