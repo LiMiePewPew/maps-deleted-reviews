@@ -351,6 +351,7 @@ function getFilteredSortedVenues() {
 function renderVenueCard(venue, index) {
   const status = venueStatus(venue);
   const noticeText = venue.hasNotice ? formatNoticeRange(venue) : 'Kein Hinweis gesehen';
+  const relativeMagnitude = formatRelativeMagnitude(venue);
   const category = venue.googleCategory
     ? venue.googleCategory
     : venue.searchTerm
@@ -376,6 +377,11 @@ function renderVenueCard(venue, index) {
           <strong>${venue.totalReviews !== null ? formatNumber(venue.totalReviews) : '—'}</strong>
           <span>beim Crawl sichtbare Bewertungen</span>
         </span>
+        ${
+          relativeMagnitude
+            ? `<span class="metric"><strong>${escapeHtml(relativeMagnitude.short)}</strong><span>Hinweis relativ zu sichtbaren Bewertungen</span></span>`
+            : ''
+        }
         <span class="metric">
           <strong>${venue.scrapedAt ? formatDate(venue.scrapedAt) : '—'}</strong>
           <span>geprüft am</span>
@@ -389,6 +395,7 @@ function renderVenueCard(venue, index) {
 
 function openDetails(venue) {
   const noticeText = venue.hasNotice ? formatNoticeRange(venue) : 'Kein Hinweis gesehen';
+  const relativeMagnitude = formatRelativeMagnitude(venue);
   const status = venueStatus(venue);
   const category = venue.googleCategory
     ? venue.googleCategory
@@ -415,6 +422,7 @@ function openDetails(venue) {
 
     <div class="dialog-grid">
       <div class="dialog-metric"><span>Beim Crawl sichtbare Bewertungen</span><strong>${venue.totalReviews !== null ? formatNumber(venue.totalReviews) : 'Nicht verfügbar'}</strong></div>
+      ${relativeMagnitude ? `<div class="dialog-metric"><span>Relative Größenordnung</span><strong>${escapeHtml(relativeMagnitude.long)}</strong></div>` : ''}
       <div class="dialog-metric"><span>Status</span><strong>${escapeHtml(status.label)}</strong></div>
       <div class="dialog-metric"><span>Geprüft am</span><strong>${venue.scrapedAt ? formatDate(venue.scrapedAt) : 'Unbekannt'}</strong></div>
     </div>
@@ -422,7 +430,9 @@ function openDetails(venue) {
     <p class="dialog-explanation">
       Einzelne Rezensionstexte wurden nicht ausgewertet. Aus dem Hinweis allein lässt sich nicht ableiten,
       ob eine Löschung berechtigt oder unberechtigt war. Ein fehlender Hinweis ist kein Beleg für null
-      entfernte Bewertungen.
+      entfernte Bewertungen. Die relative Größenordnung setzt den Google-Hinweisbereich ins Verhältnis zur
+      beim Crawl sichtbaren Bewertungszahl. Sie ist keine Löschquote, weil sich die Zeiträume nicht
+      vollständig entsprechen. Bei „Über 250“ ist nur eine Untergrenze bekannt.
     </p>
 
     <div class="dialog-actions">
@@ -458,6 +468,39 @@ function formatNoticeRange(venue) {
     return `${formatNumber(venue.noticeMin)} ${venue.noticeMin === 1 ? 'Bewertung' : 'Bewertungen'}`;
   }
   return `${formatNumber(venue.noticeMin)}–${formatNumber(venue.noticeMax)} Bewertungen`;
+}
+
+function formatRelativeMagnitude(venue) {
+  const totalReviews = nullableNumber(venue.totalReviews);
+  if (!venue.hasNotice || totalReviews === null || totalReviews <= 0) {
+    return null;
+  }
+
+  if (venue.noticeOpenEnded) {
+    const thresholdPercent = (250 / totalReviews) * 100;
+    return {
+      short: `> ${formatPercentValue(thresholdPercent)}`,
+      long: `mehr als ${formatPercentValue(thresholdPercent)}`,
+    };
+  }
+
+  const min = nullableNumber(venue.noticeMin);
+  const max = nullableNumber(venue.noticeMax);
+  if (min === null || max === null || min <= 0 || max <= 0) {
+    return null;
+  }
+
+  const minPercent = (min / totalReviews) * 100;
+  const maxPercent = (max / totalReviews) * 100;
+  if (min === max) {
+    const value = formatPercentValue(minPercent);
+    return { short: `ca. ${value}`, long: `ca. ${value}` };
+  }
+
+  return {
+    short: `ca. ${formatPercentNumber(minPercent)}–${formatPercentNumber(maxPercent)} %`,
+    long: `ca. ${formatPercentNumber(minPercent)} bis ${formatPercentNumber(maxPercent)} %`,
+  };
 }
 
 function noticeSortValue(venue) {
@@ -501,8 +544,12 @@ function formatNumber(value) {
   return new Intl.NumberFormat('de-DE').format(value);
 }
 
+function formatPercentNumber(value) {
+  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 }).format(value);
+}
+
 function formatPercentValue(value) {
-  return `${new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 }).format(value)} %`;
+  return `${formatPercentNumber(value)} %`;
 }
 
 function formatDate(value) {
