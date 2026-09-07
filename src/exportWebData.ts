@@ -83,15 +83,15 @@ const TARGET_AREAS: Record<string, TargetArea> = {
 };
 
 const CLEARLY_NON_GASTRO_NAME_PATTERN =
-  /\b(?:thai[- ]?massage|massage|nagelstudio|nails?|lashes?|tattoo|piercing|sprachschule|parkplatz|bahnhof|eventagentur|mädchenzentrum|fitnessstudio|fahrschule)\b|design\s+in\s+stein/i;
+  /\b(?:thai[- ]?massage|massage|masaje|nagelstudio|nails?|lashes?|tattoo|piercing|sprachschule|parkplatz|aparcamiento|bahnhof|eventagentur|mädchenzentrum|fitnessstudio|gimnasio|fahrschule|autoescuela|peluquer(?:ía|ia)|estética|estetica)\b|design\s+in\s+stein/i;
 const CLEARLY_NON_GASTRO_CATEGORY_PATTERN =
   /\b(?:massage|massage spa|nail salon|beautician|eyelash salon|tattoo|piercing|parking|railway|train station|language school|beauty salon|fitness center|driving school)\b/i;
 const CLEARLY_LODGING_NAME_PATTERN =
-  /\b(?:hotel|pension|boardinghouse|hostel|jugendherberge|monteurzimmer|ferienwohnung|ferienhaus|apartment|appartement|campingplatz|campground|limehome|stayery)\b/i;
+  /\b(?:hotel|hostal|pension|pensión|boardinghouse|hostel|albergue|jugendherberge|monteurzimmer|ferienwohnung|ferienhaus|apartment|appartement|apartamento|apartamentos|apartahotel|casa\s+rural|campingplatz|campground|camping|limehome|stayery)\b/i;
 const CLEARLY_LODGING_CATEGORY_PATTERN =
   /\b(?:hotel|hostel|lodging|guest house|bed\s*(?:&|and)\s*breakfast|campground|camping|holiday apartment|serviced apartment)\b/i;
 const GASTRO_SIGNAL_PATTERN =
-  /\b(?:restaurant|cafe|café|bar|bistro|gasthaus|gaststätte|brauerei|weinbar|grill|küche|kitchen|frühstück|breakfast|eventrooms?)\b/i;
+  /\b(?:restaurant|restaurante|cafe|café|cafetería|cafeteria|bar|bistro|tapas|pizzería|pizzeria|hamburguesería|hamburgueseria|heladería|heladeria|arrocería|arroceria|marisquería|marisqueria|chiringuito|paella|gasthaus|gaststätte|brauerei|weinbar|grill|küche|kitchen|frühstück|breakfast|brunch|eventrooms?)\b/i;
 const CLEARLY_NON_GASTRO_EXACT_NAMES = new Set(
   [
     'MariJing Thai Massage & Asia Wellness',
