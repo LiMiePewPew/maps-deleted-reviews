@@ -39,6 +39,44 @@ The dashboard source is the merged raw output:
 output/deleted-reviews-osnabruck-gastro-all.csv
 ```
 
+## 2b. Crawl Torrevieja
+
+Use the Spanish discovery preset. Keeping the browser locale at `de-DE` is intentional because the notice parser is validated against Google's German transparency wording.
+
+```bash
+npm start -- \
+  --browser cloak \
+  --city Torrevieja \
+  --country Spain \
+  --full-gastro-scan
+```
+
+Merged raw output:
+
+```text
+output/deleted-reviews-torrevieja-gastro-all.csv
+```
+
+Export the public dataset:
+
+```bash
+npm run export-web-data:torrevieja
+```
+
+Output:
+
+```text
+docs/data/torrevieja.json
+```
+
+Dashboard:
+
+```text
+https://limiepewpew.github.io/maps-deleted-reviews/torrevieja/
+```
+
+The Torrevieja area filter uses explicit city postcodes first, rejects named neighboring municipalities, then falls back to Maps coordinates. It remains conservative when location evidence is missing.
+
 ## 3. Run local checks and export the public JSON
 
 ```bash
