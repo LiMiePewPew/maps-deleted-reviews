@@ -1,6 +1,8 @@
 export type GastroPreset = 'de' | 'es';
 
-export const FULL_GASTRO_PRESETS = {
+type GastroPresetEntry = { searchTerm: string; depth: number };
+
+export const FULL_GASTRO_PRESETS: Record<GastroPreset, readonly GastroPresetEntry[]> = {
   de: [
     { searchTerm: 'restaurant', depth: 200 },
     { searchTerm: 'Cafe', depth: 180 },
