@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 2,
+  "city": "Torrevieja",
+  "generatedAt": "2026-09-07T00:00:00.000Z",
+  "source": "Google Maps public review-removal transparency notices",
+  "sourceCsv": "output/deleted-reviews-torrevieja-gastro-all.csv",
+  "summary": {
+    "candidateProfiles": 0,
+    "observedVenues": 0,
+    "noticesFound": 0,
+    "noNoticeObserved": 0,
+    "uncertain": 0,
+    "failed": 0,
+    "firstScrapedAt": null,
+    "lastScrapedAt": null,
+    "excludedOutsideArea": 0,
+    "excludedClearlyNonGastro": 0
+  },
+  "venues": []
+}
