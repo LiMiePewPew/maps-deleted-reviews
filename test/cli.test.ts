@@ -108,6 +108,17 @@ describe('parseCliArgs', () => {
     const parsed = parseCliArgs(['--full-gastro-scan', '--gastro-preset', 'es']);
     expect(parsed.gastroPreset).toBe('es');
     expect(parsed.overrides.searchTerms).toContain('paella');
+
+    const forcedGerman = parseCliArgs([
+      '--country',
+      'Spain',
+      '--full-gastro-scan',
+      '--gastro-preset',
+      'de',
+    ]);
+    expect(forcedGerman.gastroPreset).toBe('de');
+    expect(forcedGerman.overrides.searchTerms).toContain('Döner');
+
     expect(() => parseCliArgs(['--gastro-preset', 'other'])).toThrow(/de.*es/i);
   });
 
