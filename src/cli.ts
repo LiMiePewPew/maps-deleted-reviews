@@ -18,6 +18,7 @@ export function parseCliArgs(args: string[]): CliArgs {
   let fullGastroScan = false;
   let browser: BrowserBackend = 'playwright';
   let gastroPreset: GastroPreset = 'de';
+  let gastroPresetExplicit = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -72,6 +73,7 @@ export function parseCliArgs(args: string[]): CliArgs {
         throw new Error('--gastro-preset must be either "de" or "es"');
       }
       gastroPreset = value;
+      gastroPresetExplicit = true;
       index += 1;
       continue;
     }
@@ -141,7 +143,7 @@ export function parseCliArgs(args: string[]): CliArgs {
   }
 
   if (fullGastroScan) {
-    if (gastroPreset === 'de' && /^(?:spain|españa)$/i.test(overrides.country ?? '')) {
+    if (!gastroPresetExplicit && /^(?:spain|españa)$/i.test(overrides.country ?? '')) {
       gastroPreset = 'es';
     }
     overrides.searchTerms = fullGastroSearchTerms(gastroPreset);
