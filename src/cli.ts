@@ -1,5 +1,5 @@
 import type { BrowserBackend } from './browserRuntime.js';
-import { FULL_GASTRO_SEARCH_TERMS, fullGastroSearchTerms, type GastroPreset } from './fullGastro.js';
+import { fullGastroSearchTerms, type GastroPreset } from './fullGastro.js';
 import type { RawScraperConfig } from './types.js';
 
 export { FULL_GASTRO_SEARCH_TERMS } from './fullGastro.js';
