@@ -15,7 +15,8 @@
     "dev": "tsx src/index.ts --config config.example.json",
     "sort-csv": "tsx src/csvSort.ts",
     "merge-csv": "tsx src/csvMerge.ts",
-    "export-web-data": "tsx src/exportWebData.ts"
+    "export-web-data": "tsx src/exportWebData.ts",
+    "export-web-data:torrevieja": "tsx src/exportWebData.ts output/deleted-reviews-torrevieja-gastro-all.csv docs/data/torrevieja.json Torrevieja"
   },
   "keywords": [
     "google-maps",
