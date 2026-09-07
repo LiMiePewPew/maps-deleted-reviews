@@ -30,10 +30,11 @@ async function main(): Promise<void> {
     cli.fullGastroScan && cli.overrides.depth === undefined
       ? loadedConfigs.map((config) => ({
           ...config,
-          depth: fullGastroDepthFor(config.searchTerm) ?? config.depth,
+          depth: fullGastroDepthFor(config.searchTerm, cli.gastroPreset) ?? config.depth,
         }))
       : loadedConfigs;
   const cities = [...new Set(configs.map((config) => config.city))];
+  if (cli.fullGastroScan) console.log(`Gastro preset: ${cli.gastroPreset}`);
   if (cli.fullGastroScan && cities.length !== 1) {
     throw new Error('--full-gastro-scan currently supports exactly one city per invocation.');
   }
