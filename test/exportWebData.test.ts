@@ -123,6 +123,33 @@ describe('web data export', () => {
     ]);
   });
 
+  it('filters obvious out-of-area Google results from the Torrevieja web dataset', () => {
+    const header =
+      'venue_type,name,total_reviews,deleted_reviews_min,deleted_reviews_max,review_notice,url,address,status,scraped_at';
+    const dataset = buildWebDataset(
+      [
+        header,
+        'restaurante,Centro Torrevieja,120,0,0,,"https://www.google.com/maps/place/Test/@37.9780,-0.6820,17z","03182 Torrevieja",ok,2026-09-07T10:00:00.000Z',
+        'cafetería,La Mata Cafe,90,2,5,"2 bis 5 Bewertungen aufgrund von Beschwerden wegen Diffamierung entfernt.","https://www.google.com/maps/place/Test/@38.0230,-0.6530,17z","03188 La Mata, Torrevieja",ok,2026-09-07T10:01:00.000Z',
+        'bar,Los Montesinos Bar,80,11,20,"11 bis 20 Bewertungen aufgrund von Beschwerden wegen Diffamierung entfernt.","https://www.google.com/maps/place/Test/@38.0280,-0.7420,17z","03187 Los Montesinos",ok,2026-09-07T10:02:00.000Z',
+        'restaurante,Guardamar Restaurant,140,21,50,"21 bis 50 Bewertungen aufgrund von Beschwerden wegen Diffamierung entfernt.","https://www.google.com/maps/place/Test/@38.0900,-0.6550,17z","03140 Guardamar del Segura",ok,2026-09-07T10:03:00.000Z',
+        'bar,Unknown nearby profile,60,0,0,,"https://www.google.com/maps/place/Test/@37.9900,-0.7000,17z",,ok,2026-09-07T10:04:00.000Z',
+      ].join('\n'),
+      'Torrevieja',
+      'input.csv',
+    );
+
+    expect(dataset.summary.candidateProfiles).toBe(5);
+    expect(dataset.summary.excludedOutsideArea).toBe(2);
+    expect(dataset.summary.observedVenues).toBe(3);
+    expect(dataset.summary.noticesFound).toBe(1);
+    expect(dataset.venues.map((venue) => venue.name).sort()).toEqual([
+      'Centro Torrevieja',
+      'La Mata Cafe',
+      'Unknown nearby profile',
+    ]);
+  });
+
   it('prefers actual !3d/!4d place coordinates over the Maps viewport', () => {
     expect(
       parseGoogleMapsCoordinates(
@@ -180,6 +207,18 @@ describe('web data export', () => {
         googleCategory: 'Hotel',
       }),
     ).toBe(false);
+    expect(
+      isClearlyNonGastroProfile({
+        name: 'Hotel Restaurante Costa Blanca',
+        googleCategory: 'Hotel',
+      }),
+    ).toBe(false);
+    expect(
+      isClearlyNonGastroProfile({
+        name: 'Apartamentos Playa Azul',
+        googleCategory: 'Lodging',
+      }),
+    ).toBe(true);
   });
 
   it('counts non-gastro exclusions separately from area exclusions', () => {

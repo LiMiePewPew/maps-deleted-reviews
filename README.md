@@ -147,6 +147,37 @@ npm start -- \
 
 Do not use `--depth 50` for the normal broad Osnabrück crawl; it recreates the coverage ceiling that the adaptive preset was added to remove.
 
+## Torrevieja gastro scan
+
+Torrevieja uses the Spanish discovery preset while intentionally keeping the browser UI in German so the validated German transparency-notice parser remains unchanged:
+
+```bash
+npm start -- \
+  --browser cloak \
+  --city Torrevieja \
+  --country Spain \
+  --full-gastro-scan
+```
+
+Passing `--country Spain` automatically selects the `es` gastro preset. It can also be selected explicitly with `--gastro-preset es`.
+
+The Spanish preset searches local discovery terms such as `restaurante`, `cafetería`, `tapas`, `arrocería`, `marisquería`, `paella`, `heladería` and `chiringuito`. These are discovery queries, not business classifications.
+
+Expected merged output:
+
+```text
+output/deleted-reviews-torrevieja-gastro-all.csv
+output/deleted-reviews-torrevieja-gastro-all-positive.csv
+```
+
+Export the public Torrevieja dataset with:
+
+```bash
+npm run export-web-data:torrevieja
+```
+
+The public exporter has a Torrevieja target-area profile. It accepts Torrevieja postcodes 03180–03186 and 03188, rejects explicit neighboring municipalities/postcodes such as Los Montesinos and Guardamar, and falls back to a conservative distance check when only Maps coordinates are available. Unknown locations are still kept rather than removed on guesswork.
+
 ## Full scan output
 
 A full scan writes separate CSV/state/summary files per search term and then creates merged output.

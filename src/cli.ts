@@ -1,5 +1,5 @@
 import type { BrowserBackend } from './browserRuntime.js';
-import { FULL_GASTRO_SEARCH_TERMS } from './fullGastro.js';
+import { fullGastroSearchTerms, type GastroPreset } from './fullGastro.js';
 import type { RawScraperConfig } from './types.js';
 
 export { FULL_GASTRO_SEARCH_TERMS } from './fullGastro.js';
@@ -9,6 +9,7 @@ export interface CliArgs {
   overrides: RawScraperConfig;
   fullGastroScan: boolean;
   browser: BrowserBackend;
+  gastroPreset: GastroPreset;
 }
 
 export function parseCliArgs(args: string[]): CliArgs {
@@ -16,6 +17,8 @@ export function parseCliArgs(args: string[]): CliArgs {
   let configPath = 'config.json';
   let fullGastroScan = false;
   let browser: BrowserBackend = 'playwright';
+  let gastroPreset: GastroPreset = 'de';
+  let gastroPresetExplicit = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -62,7 +65,16 @@ export function parseCliArgs(args: string[]): CliArgs {
     }
     if (arg === '--full-gastro-scan' || arg === '--large-list') {
       fullGastroScan = true;
-      overrides.searchTerms = [...FULL_GASTRO_SEARCH_TERMS];
+      continue;
+    }
+    if (arg === '--gastro-preset') {
+      const value = requireValue(arg, next).toLowerCase();
+      if (value !== 'de' && value !== 'es') {
+        throw new Error('--gastro-preset must be either "de" or "es"');
+      }
+      gastroPreset = value;
+      gastroPresetExplicit = true;
+      index += 1;
       continue;
     }
     if (arg === '--depth') {
@@ -130,7 +142,14 @@ export function parseCliArgs(args: string[]): CliArgs {
     }
   }
 
-  return { configPath, overrides, fullGastroScan, browser };
+  if (fullGastroScan) {
+    if (!gastroPresetExplicit && /^(?:spain|españa)$/i.test(overrides.country ?? '')) {
+      gastroPreset = 'es';
+    }
+    overrides.searchTerms = fullGastroSearchTerms(gastroPreset);
+  }
+
+  return { configPath, overrides, fullGastroScan, browser, gastroPreset };
 }
 
 function parseCommaSeparated(value: string): string[] {

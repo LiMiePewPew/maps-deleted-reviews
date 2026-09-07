@@ -45,32 +45,53 @@ const DEFAULT_SOURCE = 'output/deleted-reviews-osnabruck-gastro-all.csv';
 const DEFAULT_OUTPUT = 'docs/data/osnabruck.json';
 const DEFAULT_CITY = 'Osnabrück';
 
-const OSNABRUECK_CENTER = { lat: 52.27, lon: 8.05 };
-const OSNABRUECK_MAX_DISTANCE_KM = 12.5;
-const OSNABRUECK_POSTCODES = new Set([
-  '49074',
-  '49076',
-  '49078',
-  '49080',
-  '49082',
-  '49084',
-  '49086',
-  '49088',
-  '49090',
-]);
-const NEARBY_MUNICIPALITY_PATTERN =
-  /\b(?:belm|bissendorf|georgsmarienh(?:ü|u)tte|hasbergen|lotte|wallenhorst|bramsche|hagen\s+(?:am|a\.)\s+teutoburger\s+wald)\b/i;
+interface TargetArea {
+  center: { lat: number; lon: number };
+  maxDistanceKm: number;
+  postcodes?: Set<string>;
+  cityPattern: RegExp;
+  nearbyMunicipalityPattern?: RegExp;
+}
+
+const TARGET_AREAS: Record<string, TargetArea> = {
+  osnabruck: {
+    center: { lat: 52.27, lon: 8.05 },
+    maxDistanceKm: 12.5,
+    postcodes: new Set([
+      '49074',
+      '49076',
+      '49078',
+      '49080',
+      '49082',
+      '49084',
+      '49086',
+      '49088',
+      '49090',
+    ]),
+    cityPattern: /\bosnabr(?:ü|u)ck\b/i,
+    nearbyMunicipalityPattern:
+      /\b(?:belm|bissendorf|georgsmarienh(?:ü|u)tte|hasbergen|lotte|wallenhorst|bramsche|hagen\s+(?:am|a\.)\s+teutoburger\s+wald)\b/i,
+  },
+  torrevieja: {
+    center: { lat: 37.9833, lon: -0.6833 },
+    maxDistanceKm: 10.5,
+    postcodes: new Set(['03180', '03181', '03182', '03183', '03184', '03185', '03186', '03188']),
+    cityPattern: /\btorrevieja\b/i,
+    nearbyMunicipalityPattern:
+      /\b(?:guardamar\s+del\s+segura|los\s+montesinos|rojales|ciudad\s+quesada|san\s+miguel\s+de\s+salinas|orihuela(?:\s+costa)?|pilar\s+de\s+la\s+horadada)\b/i,
+  },
+};
 
 const CLEARLY_NON_GASTRO_NAME_PATTERN =
-  /\b(?:thai[- ]?massage|massage|nagelstudio|nails?|lashes?|tattoo|piercing|sprachschule|parkplatz|bahnhof|eventagentur|mädchenzentrum|fitnessstudio|fahrschule)\b|design\s+in\s+stein/i;
+  /\b(?:thai[- ]?massage|massage|masaje|nagelstudio|nails?|lashes?|tattoo|piercing|sprachschule|parkplatz|aparcamiento|bahnhof|eventagentur|mädchenzentrum|fitnessstudio|gimnasio|fahrschule|autoescuela|peluquer(?:ía|ia)|estética|estetica)\b|design\s+in\s+stein/i;
 const CLEARLY_NON_GASTRO_CATEGORY_PATTERN =
   /\b(?:massage|massage spa|nail salon|beautician|eyelash salon|tattoo|piercing|parking|railway|train station|language school|beauty salon|fitness center|driving school)\b/i;
 const CLEARLY_LODGING_NAME_PATTERN =
-  /\b(?:hotel|pension|boardinghouse|hostel|jugendherberge|monteurzimmer|ferienwohnung|ferienhaus|apartment|appartement|campingplatz|campground|limehome|stayery)\b/i;
+  /\b(?:hotel|hostal|pension|pensión|boardinghouse|hostel|albergue|jugendherberge|monteurzimmer|ferienwohnung|ferienhaus|apartment|appartement|apartamento|apartamentos|apartahotel|casa\s+rural|campingplatz|campground|camping|limehome|stayery)\b/i;
 const CLEARLY_LODGING_CATEGORY_PATTERN =
   /\b(?:hotel|hostel|lodging|guest house|bed\s*(?:&|and)\s*breakfast|campground|camping|holiday apartment|serviced apartment)\b/i;
 const GASTRO_SIGNAL_PATTERN =
-  /\b(?:restaurant|cafe|café|bar|bistro|gasthaus|gaststätte|brauerei|weinbar|grill|küche|kitchen|frühstück|breakfast|eventrooms?)\b/i;
+  /\b(?:restaurant|restaurante|cafe|café|cafetería|cafeteria|bar|bistro|tapas|pizzería|pizzeria|hamburguesería|hamburgueseria|heladería|heladeria|arrocería|arroceria|marisquería|marisqueria|chiringuito|paella|gasthaus|gaststätte|brauerei|weinbar|grill|küche|kitchen|frühstück|breakfast|brunch|eventrooms?)\b/i;
 const CLEARLY_NON_GASTRO_EXACT_NAMES = new Set(
   [
     'MariJing Thai Massage & Asia Wellness',
@@ -127,21 +148,22 @@ export function isClearlyOutsideTargetArea(
   venue: Pick<WebVenue, 'name' | 'address' | 'url'>,
   city = DEFAULT_CITY,
 ): boolean {
-  if (normalizeCity(city) !== 'osnabruck') {
+  const target = TARGET_AREAS[normalizeCity(city)];
+  if (!target) {
     return false;
   }
 
   const nameAndAddress = `${venue.name} ${venue.address}`;
-  if (NEARBY_MUNICIPALITY_PATTERN.test(nameAndAddress)) {
+  if (target.nearbyMunicipalityPattern?.test(nameAndAddress)) {
     return true;
   }
 
   const postcode = venue.address.match(/\b\d{5}\b/)?.[0];
-  if (postcode) {
-    return !OSNABRUECK_POSTCODES.has(postcode);
+  if (postcode && target.postcodes) {
+    return !target.postcodes.has(postcode);
   }
 
-  if (/\bosnabr(?:ü|u)ck\b/i.test(venue.address)) {
+  if (target.cityPattern.test(venue.address)) {
     return false;
   }
 
@@ -150,7 +172,7 @@ export function isClearlyOutsideTargetArea(
     return false;
   }
 
-  return haversineDistanceKm(OSNABRUECK_CENTER, coordinates) > OSNABRUECK_MAX_DISTANCE_KM;
+  return haversineDistanceKm(target.center, coordinates) > target.maxDistanceKm;
 }
 
 export function isClearlyNonGastroProfile(
