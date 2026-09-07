@@ -207,6 +207,18 @@ describe('web data export', () => {
         googleCategory: 'Hotel',
       }),
     ).toBe(false);
+    expect(
+      isClearlyNonGastroProfile({
+        name: 'Hotel Restaurante Costa Blanca',
+        googleCategory: 'Hotel',
+      }),
+    ).toBe(false);
+    expect(
+      isClearlyNonGastroProfile({
+        name: 'Apartamentos Playa Azul',
+        googleCategory: 'Lodging',
+      }),
+    ).toBe(true);
   });
 
   it('counts non-gastro exclusions separately from area exclusions', () => {
