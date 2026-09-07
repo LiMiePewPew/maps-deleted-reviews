@@ -31,6 +31,7 @@ describe('parseCliArgs', () => {
       },
       fullGastroScan: false,
       browser: 'playwright',
+      gastroPreset: 'de',
     });
   });
 
@@ -83,6 +84,31 @@ describe('parseCliArgs', () => {
     expect(fullGastroDepthFor('indisch')).toBe(60);
     expect(fullGastroDepthFor('Cocktailbar')).toBe(80);
     expect(fullGastroDepthFor('unknown')).toBeUndefined();
+  });
+
+  it('selects the Spanish gastro preset for Spain and uses local search terms', () => {
+    const parsed = parseCliArgs([
+      '--city',
+      'Torrevieja',
+      '--country',
+      'Spain',
+      '--full-gastro-scan',
+    ]);
+
+    expect(parsed.gastroPreset).toBe('es');
+    expect(parsed.overrides.searchTerms).toContain('restaurante');
+    expect(parsed.overrides.searchTerms).toContain('arrocería');
+    expect(parsed.overrides.searchTerms).toContain('chiringuito');
+    expect(parsed.overrides.searchTerms).not.toContain('Döner');
+    expect(fullGastroDepthFor('restaurante', 'es')).toBe(220);
+    expect(fullGastroDepthFor('cafetería', 'es')).toBe(180);
+  });
+
+  it('allows explicitly selecting a gastro preset', () => {
+    const parsed = parseCliArgs(['--full-gastro-scan', '--gastro-preset', 'es']);
+    expect(parsed.gastroPreset).toBe('es');
+    expect(parsed.overrides.searchTerms).toContain('paella');
+    expect(() => parseCliArgs(['--gastro-preset', 'other'])).toThrow(/de.*es/i);
   });
 
   it('keeps an explicit depth available as a manual full-scan override', () => {
