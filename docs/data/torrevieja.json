@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "city": "Torrevieja",
-  "generatedAt": "2026-09-07T00:00:00.000Z",
+  "generatedAt": null,
   "source": "Google Maps public review-removal transparency notices",
   "sourceCsv": "output/deleted-reviews-torrevieja-gastro-all.csv",
   "summary": {
